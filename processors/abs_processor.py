@@ -51,12 +51,18 @@ class ABSProcessor:
     def _get_settings(self) -> dict:
         return self.parent_window.current_exp_json.get("analysis_settings", {})
 
-    def _load_data(self, rel_path: str):
+    def _load_data(self, rel_path):
         """Loads a data file using the public reader and extracts wl/intensity."""
+        if isinstance(rel_path, dict):
+            rel_path = rel_path.get("path") or rel_path.get("file")
+
+        if isinstance(rel_path, Path):
+            rel_path = str(rel_path)
+
         if not rel_path:
             return None, None
         
-        full_path = self.parent_window.base_dir / rel_path
+        full_path = self.parent_window.base_dir / Path(rel_path)
         if not full_path.exists():
             print(f"File not found: {full_path}")
             return None, None

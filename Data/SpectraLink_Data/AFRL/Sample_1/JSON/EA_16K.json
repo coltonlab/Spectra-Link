@@ -7,43 +7,43 @@
     "data_files": {
         "voltage_scans": [
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\100V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\100V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 100.0,
-                "notes": ""
+                "notes": "fvdfsdfdsf"
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\150V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\150V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 150.0,
                 "notes": ""
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\200V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\200V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 200.0,
                 "notes": ""
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\250V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\250V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 250.0,
                 "notes": ""
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\300V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\300V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 300.0,
                 "notes": ""
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\350V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\350V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 350.0,
                 "notes": ""
             },
             {
-                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\400V EA AFRL Old L-Ala PbI3 #1 16K.xls",
+                "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\400V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
                 "voltage": 400.0,
                 "notes": ""
@@ -51,11 +51,11 @@
         ],
         "none_files": [],
         "blank_file": {
-            "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\Blank AFRL Old L-Ala PbI3 #1 295K.xls",
+            "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\Blank AFRL Old L-Ala PbI3 #1 295K.xls",
             "notes": ""
         },
         "transmission_file": {
-            "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link2\\Data\\2026-05-06\\Transmission AFRL Old L-Ala PbI3 #1 16K.xls",
+            "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\Transmission AFRL Old L-Ala PbI3 #1 16K.xls",
             "notes": ""
         }
     },
@@ -69,6 +69,6 @@
         "flip_y": false,
         "convert_to_ev": true,
         "normalize_to_peak": false,
-        "show_legend": true
+        "show_legend": false
     }
 }
