@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
     QLabel, QInputDialog, QMessageBox, QFileDialog,
     QCheckBox, QTableWidget, QTableWidgetItem, QHeaderView,
     QAbstractItemView, QSpinBox, QDoubleSpinBox, QFrame,
-    QDialog, QLineEdit, QDialogButtonBox, QFormLayout, QMenu
+    QDialog, QLineEdit, QPlainTextEdit, QDialogButtonBox, QFormLayout, QMenu
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
@@ -93,7 +93,7 @@ class DiscoveryTab(QWidget):
         for row in range(self.table.rowCount()):
             for col in range(self.table.columnCount()):
                 w = self.table.cellWidget(row, col)
-                if isinstance(w, (QComboBox, QDoubleSpinBox, QLineEdit)):
+                if isinstance(w, (QComboBox, QDoubleSpinBox, QLineEdit, QPlainTextEdit)):
                     w.setStyleSheet(self._get_widget_style(w, is_dark))
         
         self._update_global_params_style(is_dark)
@@ -113,8 +113,9 @@ class DiscoveryTab(QWidget):
             if widget.isEnabled():
                 return f"QDoubleSpinBox {{ background-color: {T.spin_bg}; color: {T.spin_fg}; border: 1px solid {T.spin_border}; border-radius: 3px; padding: 2px 4px; min-width: 80px; }}"
             return f"QDoubleSpinBox {{ background-color: {T.spin_disabled_bg}; color: {T.spin_disabled_fg}; border: 1px solid {T.spin_border}; border-radius: 3px; padding: 2px 4px; min-width: 80px; }}"
-        elif isinstance(widget, QLineEdit):
-            return f"QLineEdit {{ background-color: {T.bg_input}; color: {T.text_primary}; border: 1px solid {T.border}; border-radius: 3px; padding: 2px 6px; min-width: 100px; }}"
+        elif isinstance(widget, (QLineEdit, QPlainTextEdit)):
+            cls = "QLineEdit" if isinstance(widget, QLineEdit) else "QPlainTextEdit"
+            return f"{cls} {{ background-color: {T.bg_input}; color: {T.text_primary}; border: 1px solid {T.border}; border-radius: 3px; padding: 2px 6px; min-width: 100px; }}"
         return ""
 
     def _update_global_params_style(self, is_dark):
@@ -335,6 +336,8 @@ class DiscoveryTab(QWidget):
         if technique is None or technique not in TECHNIQUE_CONFIG:
             cols = ["Filename", "Scan Type", "Notes", "Full Path"]
             self.table.setColumnCount(len(cols))
+            for i in range(self.table.columnCount()):
+                self.table.setColumnHidden(i, False)
             self.table.setHorizontalHeaderLabels(cols)
             hh = self.table.horizontalHeader()
             hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Filename
@@ -354,14 +357,14 @@ class DiscoveryTab(QWidget):
         cols.append("Full Path")
 
         self.table.setColumnCount(len(cols))
+        for i in range(self.table.columnCount()):
+            self.table.setColumnHidden(i, False)
         self.table.setHorizontalHeaderLabels(cols)
         hh = self.table.horizontalHeader()
         hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Filename
-        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)          # Scan Type
-        self.table.setColumnWidth(1, 120)
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)          # Scan Type
         if has_local:
-            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed) # Local
-            self.table.setColumnWidth(2, 100)
+            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents) # Local
             hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)          # Notes
         else:
             hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)          # Notes
@@ -488,6 +491,10 @@ class DiscoveryTab(QWidget):
             row       = self.table.rowCount()
             self.table.insertRow(row)
 
+            # Ensure items exist for all columns so background colors and layout work correctly
+            for col_idx in range(self.table.columnCount()):
+                self.table.setItem(row, col_idx, QTableWidgetItem(""))
+
             # 0: Filename
             item_name = QTableWidgetItem(fname)
             item_name.setFlags(item_name.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -558,6 +565,10 @@ class DiscoveryTab(QWidget):
             row   = self.table.rowCount()
             self.table.insertRow(row)
 
+            # Ensure items exist for all columns
+            for col_idx in range(self.table.columnCount()):
+                self.table.setItem(row, col_idx, QTableWidgetItem(""))
+
             # 0: Filename
             item_name = QTableWidgetItem(fname)
             item_name.setFlags(item_name.flags() & ~Qt.ItemFlag.ItemIsEditable)
@@ -618,8 +629,10 @@ class DiscoveryTab(QWidget):
         return spin
 
     def _make_notes_edit(self, text):
-        edit = QLineEdit(text)
+        edit = QPlainTextEdit(text)
         edit.setPlaceholderText("Add notes...")
+        edit.setTabChangesFocus(True)
+        edit.setMaximumHeight(45)
         edit.setStyleSheet(self._get_widget_style(edit, self.parent_window.dark_mode))
         edit.textChanged.connect(self._schedule_autosave)
         return edit
@@ -749,7 +762,12 @@ class DiscoveryTab(QWidget):
 
         active_scan_types = local_param.get("active_scan_types", []) if has_local else []
         path_col  = self.table.columnCount() - 1
-        notes_col = self.table.columnCount() - 2
+        if has_local:
+            local_col = 2
+            notes_col = 3
+        else:
+            local_col = None
+            notes_col = 2
 
         for row in range(self.table.rowCount()):
             path_item    = self.table.item(row, path_col)
@@ -760,7 +778,7 @@ class DiscoveryTab(QWidget):
 
             full_path = path_item.text()
             scan_type = combo_widget.currentText()
-            notes_val = notes_widget.text()
+            notes_val = notes_widget.toPlainText()
 
             try:
                 rel = Path(full_path).relative_to(self.parent_window.base_dir).as_posix()
@@ -768,7 +786,7 @@ class DiscoveryTab(QWidget):
                 rel = full_path
 
             if has_local and scan_type in active_scan_types:
-                spin      = self.table.cellWidget(row, 2)
+                spin      = self.table.cellWidget(row, local_col)
                 local_val = spin.value() if isinstance(spin, QDoubleSpinBox) else 0.0
                 data["data_files"][f"{local_key}_scans"].append({
                     "file":      rel,
