@@ -1,0 +1,71 @@
+<Cluster>
+<Name></Name>
+<NumElts>3</NumElts>
+<EW>
+<Name>Scanner</Name>
+<Choice>Dummy Scan</Choice>
+<Choice>Analog Output Scan</Choice>
+<Choice>Function Gen Scan</Choice>
+<Choice>Magna Current Scan</Choice>
+<Choice>Magna Voltage Scan</Choice>
+<Choice>Magnetic Field Lakeshore</Choice>
+<Choice>Magnetic Field Lakeshore Continuous</Choice>
+<Choice>Magnetic Field Oxford</Choice>
+<Choice>Magnetic Field Oxford Continuous</Choice>
+<Choice>Microwave Freq Scan</Choice>
+<Choice>Pulse Gen Basic Scan</Choice>
+<Choice>Pulse Gen Scan</Choice>
+<Choice>Translation Stage Coarse</Choice>
+<Choice>Translation Stage Dual</Choice>
+<Choice>Translation Stage Fine</Choice>
+<Choice>Voltage Pulse Gating System (HV supply)</Choice>
+<Choice>Wavelength ActiveX</Choice>
+<Choice>Wavelength Digikröm</Choice>
+<Choice>Wavelength PEM and Digikröm</Choice>
+<Choice>Wavelength Triax 550</Choice>
+<Choice>None</Choice>
+<Val>17</Val>
+</EW>
+<EW>
+<Name>Scanner 2 (second scan axis)</Name>
+<Choice>Dummy Scan</Choice>
+<Choice>Analog Output Scan</Choice>
+<Choice>Function Gen Scan</Choice>
+<Choice>Magna Current Scan</Choice>
+<Choice>Magna Voltage Scan</Choice>
+<Choice>Magnetic Field Lakeshore</Choice>
+<Choice>Magnetic Field Lakeshore Continuous</Choice>
+<Choice>Magnetic Field Oxford</Choice>
+<Choice>Magnetic Field Oxford Continuous</Choice>
+<Choice>Microwave Freq Scan</Choice>
+<Choice>Pulse Gen Basic Scan</Choice>
+<Choice>Pulse Gen Scan</Choice>
+<Choice>Translation Stage Coarse</Choice>
+<Choice>Translation Stage Dual</Choice>
+<Choice>Translation Stage Fine</Choice>
+<Choice>Voltage Pulse Gating System (HV supply)</Choice>
+<Choice>Wavelength ActiveX</Choice>
+<Choice>Wavelength Digikröm</Choice>
+<Choice>Wavelength PEM and Digikröm</Choice>
+<Choice>Wavelength Triax 550</Choice>
+<Choice>None</Choice>
+<Val>20</Val>
+</EW>
+<EW>
+<Name>Reader</Name>
+<Choice>Dummy</Choice>
+<Choice>Cryostat Temperature</Choice>
+<Choice>DAQmx Analog</Choice>
+<Choice>Fluke Multimeter</Choice>
+<Choice>Keithley Multimeter</Choice>
+<Choice>Lockin SR810</Choice>
+<Choice>Lockin SR830</Choice>
+<Choice>Lockin and Fluke Multimeter</Choice>
+<Choice>Lockin and Keithley Multimeter</Choice>
+<Choice>Photon Counter Reader</Choice>
+<Choice>Power Meter</Choice>
+<Choice>Temperature Control</Choice>
+<Choice>Two Lockins</Choice>
+<Val>5</Val>
+</EW>
+</Cluster>
