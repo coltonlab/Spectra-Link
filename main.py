@@ -430,7 +430,7 @@ class SpectraLink(QMainWindow):
             for host in all_hosts:
                 host_ip = host.strip('\\').split('\\')[0]
                 try:
-                    socket.create_connection((host_ip, 445), timeout=0.1)
+                    socket.create_connection((host_ip, 445), timeout=0.2)
                     valid_hosts.append(host)
                 except Exception:
                     continue
@@ -451,6 +451,7 @@ class SpectraLink(QMainWindow):
                     # On Mac, SMB shares are typically mounted under /Volumes/ShareName
                     share_name = raw_path.split('\\')[-1]
                     self.base_dir = Path("/Volumes") / share_name / "Data"
+                    print("Macs are the best")
                 else:
                     self.base_dir = Path(raw_path) / "Data"
         else:
