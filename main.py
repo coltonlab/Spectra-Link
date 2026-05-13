@@ -451,7 +451,17 @@ class SpectraLink(QMainWindow):
                     # On Mac, SMB shares are typically mounted under /Volumes/ShareName
                     share_name = raw_path.split('\\')[-1]
                     self.base_dir = Path("/Volumes") / share_name / "Data"
-                    print("Macs are the best")
+                    if not self.base_dir.exists():
+                        msg = QMessageBox()
+                        msg.setIcon(QMessageBox.Warning)
+                        msg.setWindowTitle("Connection Error")
+                        msg.setText("User not mounted to a lab computer.")
+                        msg.setInformativeText(f"Please mount '{share_name}' in Finder first.")
+                        msg.setStandardButtons(QMessageBox.Ok)
+                        msg.exec_()
+                        self.base_dir = Path("Data")
+
+
                 else:
                     self.base_dir = Path(raw_path) / "Data"
         else:
