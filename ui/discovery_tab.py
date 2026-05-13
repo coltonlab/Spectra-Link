@@ -632,10 +632,45 @@ class DiscoveryTab(QWidget):
         edit = QPlainTextEdit(text)
         edit.setPlaceholderText("Add notes...")
         edit.setTabChangesFocus(True)
-        edit.setMaximumHeight(45)
+        
+        # Match your existing styling
         edit.setStyleSheet(self._get_widget_style(edit, self.parent_window.dark_mode))
+        
+        # Remove the scrollbar for a cleaner "growing" look
+        edit.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        
+        # 1. Set the initial height based on existing text
+        self._adjust_note_height(edit)
+        
+        # 2. Connect signals
         edit.textChanged.connect(self._schedule_autosave)
+        # This lambda ensures the box grows as you type
+        edit.textChanged.connect(lambda: self._adjust_note_height(edit))
+        
         return edit
+
+    def _adjust_note_height(self, edit):
+        """Calculates the required height based on line count."""
+        # Count how many lines are currently in the document
+        line_count = edit.document().lineCount()
+        
+        # Base height for 1 line is ~30px. 
+        # If more than 1 line, we increase it (e.g., to 45px or 60px).
+        if line_count <= 1:
+            new_height = 30
+        else:
+            # You can cap this at 45 or 60 depending on your preference
+            new_height = 45 
+            
+        edit.setFixedHeight(new_height)
+        
+        # CRITICAL: Tell the table row to snap to the new widget height
+        # We use the widget's position to find the correct row
+        pos = edit.pos()
+        if not pos.isNull():
+            index = self.table.indexAt(pos)
+            if index.isValid():
+                self.table.resizeRowToContents(index.row())
 
     def _on_scan_type_changed(self, row, text):
         cfg         = TECHNIQUE_CONFIG.get(self._current_technique, {})
