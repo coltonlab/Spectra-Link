@@ -92,6 +92,7 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
+            "color_gradient",
         ],
     },
 
@@ -125,6 +126,7 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
+            "color_gradient",
         ],
     },
 
@@ -208,6 +210,34 @@ SCAN_TYPE_COLORS = {
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Predefined color gradients for plotting
+# These correspond to common colormaps in libraries like Matplotlib
+# ──────────────────────────────────────────────────────────────────────────────
+COLOR_GRADIENTS = [
+    "viridis",
+    "plasma",
+    "inferno",
+    "magma",
+    "cividis",
+    "Greys",
+    "Purples",
+    "Blues",
+    "Greens",
+    "Oranges",
+    "Reds",
+    "YlOrBr",
+    "YlGnBu",
+    "PuBuGn",
+    "BuGn",
+    "GnBu",
+    "YlOrRd",
+    "PuRd",
+    "RdPu",
+    "BuPu",
+    "OrRd",
+]
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Human-readable labels and tooltips for every possible analysis option key.
 # analysis_tab.py reads this dict to build the dynamic options toolbar so you
 # never have to hard-code labels in two places.
@@ -240,5 +270,11 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
     "show_legend": {
         "label":   "Show Legend",
         "tooltip": "Display a legend labelling each trace",
+    },
+    "color_gradient": {
+        "label":   "Color Gradient",
+        "tooltip": "Select a color gradient for plotting multiple traces in a series.",
+        "type":    "dropdown",
+        "options": COLOR_GRADIENTS,
     },
 }
