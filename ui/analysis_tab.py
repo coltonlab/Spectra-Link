@@ -289,7 +289,7 @@ class AnalysisTab(QWidget):
 
             sample_name = initial_dir.name
             exp_name    = discovery._current_json_path.stem
-            default_name = f"{tech_name} {sample_name} {exp_name}.pdf"
+            default_name = f"{tech_name} - {sample_name} - {exp_name}.pdf"
 
         file_path, _ = QFileDialog.getSaveFileName(
             self,

@@ -706,7 +706,7 @@ class SpectraLink(QMainWindow):
                     continue
                 break
 
-            name = name.strip().replace(" ", "_")
+            name = name.strip()
             try:
                 json_dir    = self.base_dir / "SpectraLink_Data" / old_collab / old_sample / "JSON"
                 json_dir.mkdir(parents=True, exist_ok=True)
@@ -824,7 +824,7 @@ class SpectraLink(QMainWindow):
         if not is_valid:
             QMessageBox.warning(self, "Invalid Name", f"Cannot rename:\n\n{err}")
             return
-        new_name = new_name.strip().replace(" ", "_")
+        new_name = new_name.strip()
         try:
             old_path = self.base_dir / "SpectraLink_Data" / current_name
             new_path = self.base_dir / "SpectraLink_Data" / new_name
@@ -853,7 +853,7 @@ class SpectraLink(QMainWindow):
         if not is_valid:
             QMessageBox.warning(self, "Invalid Name", f"Cannot rename:\n\n{err}")
             return
-        new_name = new_name.strip().replace(" ", "_")
+        new_name = new_name.strip()
         try:
             old_path = self.base_dir / "SpectraLink_Data" / collab / current_name
             new_path = self.base_dir / "SpectraLink_Data" / collab / new_name
@@ -883,7 +883,7 @@ class SpectraLink(QMainWindow):
         if not is_valid:
             QMessageBox.warning(self, "Invalid Name", f"Cannot rename:\n\n{err}")
             return
-        new_name = new_name.strip().replace(" ", "_")
+        new_name = new_name.strip()
         try:
             json_dir = self.base_dir / "SpectraLink_Data" / collab / sample / "JSON"
             old_path = json_dir / f"{current_name}.json"
