@@ -453,7 +453,7 @@ class SpectraLink(QMainWindow):
                     self.base_dir = Path("/Volumes") / share_name / "Data"
                     if not self.base_dir.exists():
                         msg = QMessageBox()
-                        msg.setIcon(QMessageBox.Warning)
+                        msg.setIcon(QMessageBox.warning)
                         msg.setWindowTitle("Connection Error")
                         msg.setText("User not mounted to a lab computer.")
                         msg.setInformativeText(f"Please mount '{share_name}' in Finder first.")

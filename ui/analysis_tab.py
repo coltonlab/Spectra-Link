@@ -266,10 +266,35 @@ class AnalysisTab(QWidget):
 
     def save_publication_plot(self):
         """Open a save dialog and export the figure at journal dimensions."""
+        # Default fallbacks
+        initial_dir = Path(self.parent_window.base_dir)
+        default_name = "publication_plot.pdf"
+        
+        discovery = getattr(self.parent_window, "discovery_tab", None)
+        if discovery and discovery._current_json_path:
+            # 1. Directory: The sample folder (parent of the JSON folder)
+            initial_dir = discovery._current_json_path.parent.parent
+
+            # 2. Filename: <Shorthand>_<SampleFolder>_<Experiment>.pdf
+            full_tech = discovery._current_technique or "Technique"
+
+            # Define shorthand mapping for the filename
+            tech_map = {
+                "Absorption": "ABS",
+                "EA Voltage Series": "EA",
+                "Circular Dichroism (CD)": "CD",
+                "Photoluminescence (PL)": "PL"
+            }
+            tech_name = tech_map.get(full_tech, full_tech)
+
+            sample_name = initial_dir.name
+            exp_name    = discovery._current_json_path.stem
+            default_name = f"{tech_name} {sample_name} {exp_name}.pdf"
+
         file_path, _ = QFileDialog.getSaveFileName(
             self,
             "Save Publication Plot",
-            "",
+            str(initial_dir / default_name),
             "PDF (*.pdf);;PNG (*.png);;SVG (*.svg)",
         )
         if not file_path:
