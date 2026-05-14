@@ -69,6 +69,7 @@
         "flip_y": false,
         "convert_to_ev": true,
         "normalize_to_peak": false,
-        "show_legend": false
+        "show_legend": false,
+        "color_gradient": true
     }
 }
