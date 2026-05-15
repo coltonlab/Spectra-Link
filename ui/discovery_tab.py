@@ -18,6 +18,7 @@ import re
 from config.techniques import TECHNIQUE_CONFIG, SCAN_TYPE_COLORS
 # from ui.dialogs import NewExperimentDialog
 from ui.theme import get_theme
+from utils.project_manager import ProjectManager
 from utils.validators import validate_filename
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -375,29 +376,25 @@ class DiscoveryTab(QWidget):
         """Called by main window whenever sidebar selection changes.
         Reloads the table from the JSON of the selected experiment."""
         pw     = self.parent_window
-        collab = pw.combo_collab.currentText()
-        sample = pw.combo_sample.currentText()
-        exp    = pw.combo_exp.currentText()
+        collab = pw.sidebar.combo_collab.currentText()
+        sample = pw.sidebar.combo_sample.currentText()
+        exp    = pw.sidebar.combo_exp.currentText()
 
         if collab and sample and exp:
             self.lbl_target.setText(f"Target →  {collab}  /  {sample}  /  {exp}.json")
             T = get_theme(pw.dark_mode)
             self.lbl_target.setStyleSheet(f"color: {T.target_exp_fg}; font-style: normal; font-size: 11px;")
+            
             json_path = pw.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
             self._current_json_path = json_path
-            # Populate the main window's JSON cache
-            if hasattr(pw, '_cached_json'):
-                try:
-                    with open(json_path, 'r') as f:
-                        pw._cached_json = json.load(f)
-                except Exception:
-                    pw._cached_json = {}
-            technique = self._read_technique_from_json(json_path)
+            data = ProjectManager.Session.load_experiment(json_path)
+            
+            technique = data.get("core", {}).get("technique")
             self._current_technique = technique
             self._set_badge_style(technique)
             self._rebuild_columns_for_technique(technique)
             self.rebuild_parameter_ui(technique)
-            self._load_from_json(json_path)
+            self._load_from_json() # Data is already in session
         else:
             self.lbl_target.setText("No experiment selected — use the sidebar to select or create one.")
             T = get_theme(pw.dark_mode)
@@ -410,13 +407,10 @@ class DiscoveryTab(QWidget):
             self.lbl_save_status.setText("")
 
     # ------------------------------------------------------------------ LOAD FROM JSON
-    def _load_from_json(self, json_path):
+    def _load_from_json(self):
         """Populate the table from an existing experiment JSON."""
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-        except Exception:
-            return
+        data = ProjectManager.Session.get_data() # Get data from the session
+        if not data: return
 
         technique = data.get("core", {}).get("technique")
         if not technique or technique not in TECHNIQUE_CONFIG:
@@ -765,7 +759,7 @@ class DiscoveryTab(QWidget):
         if not self._current_json_path or not self._current_technique:
             return
 
-        json_path   = self._current_json_path
+        # json_path   = self._current_json_path # No longer needed, session manages path
         technique   = self._current_technique
         cfg         = TECHNIQUE_CONFIG.get(technique, {})
         local_param = cfg.get("local_param")
@@ -773,10 +767,8 @@ class DiscoveryTab(QWidget):
         local_key   = local_param["key"] if has_local else None
         key_map     = cfg.get("json_key_map", {})
 
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-        except Exception:
+        data = ProjectManager.Session.get_data() # Get the in-memory data from the session
+        if not data:
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("Save failed — read error.")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px;")
@@ -833,23 +825,12 @@ class DiscoveryTab(QWidget):
                 data["data_files"]["none_files"].append({"path": rel, "notes": notes_val})
             elif scan_type in key_map:
                 data["data_files"][key_map[scan_type]] = {"path": rel, "notes": notes_val}
-
-        try:
-            with open(json_path, 'w') as f:
-                json.dump(data, f, indent=4)
+        # Now save the session data to disk
+        if ProjectManager.Session.save():
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("✓  Saved")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_success_fg}; font-size: 10px; font-style: italic;")
-        except Exception:
+        else:
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("Save failed — write error.")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px;")
-
-    # ------------------------------------------------------------------ JSON UTILS
-    def _read_technique_from_json(self, json_path):
-        try:
-            with open(json_path, 'r') as f:
-                data = json.load(f)
-            return data.get("core", {}).get("technique", None)
-        except Exception:
-            return None

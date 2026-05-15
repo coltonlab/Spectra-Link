@@ -8,6 +8,7 @@ from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as Navigatio
 from matplotlib.figure import Figure
 from pathlib import Path
 
+from utils.project_manager import ProjectManager
 from config.techniques import TECHNIQUE_CONFIG, ANALYSIS_OPTION_META
  
 
@@ -158,7 +159,7 @@ class AnalysisTab(QWidget):
         self._options_layout.addWidget(div)
 
         # Retrieve saved states from the experiment JSON
-        saved: dict = self.parent_window.current_exp_json.get(
+        saved: dict = ProjectManager.Session.get_data().get(
             "analysis_settings", {}
         )
 
@@ -193,13 +194,13 @@ class AnalysisTab(QWidget):
 
     def _on_option_toggled(self, key: str, checked: bool):
         """Persist checkbox state to JSON then immediately replot."""
-        json_data = self.parent_window.current_exp_json
+        json_data = ProjectManager.Session.get_data()
         if "analysis_settings" not in json_data:
             json_data["analysis_settings"] = {}
         json_data["analysis_settings"][key] = checked
 
         # Persist to disk
-        self.parent_window.save_current_json()
+        ProjectManager.Session.save()
 
         # Live replot
         self.execute_plot()

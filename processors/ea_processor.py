@@ -4,6 +4,7 @@ from scipy.signal import savgol_filter
 from pathlib import Path
 from processors.public.read_colton_files import read_data_simple
 import processors.public.colton_math_functions as cmf
+from utils.project_manager import ProjectManager
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Publication-style Matplotlib settings
@@ -50,7 +51,7 @@ class EAProcessor:
     # ── internal helpers ──────────────────────────────────────────────────────
 
     def _get_settings(self) -> dict:
-        return self.parent_window.current_exp_json.get("analysis_settings", {})
+        return ProjectManager.Session.get_data().get("analysis_settings", {})
 
     def _load_data(self, rel_path):
         """Loads a data file using the public reader and extracts wl/intensity."""
@@ -85,7 +86,7 @@ class EAProcessor:
 
     def _load_traces(self):
         """Load traces from the current experiment JSON."""
-        json_data = self.parent_window.current_exp_json
+        json_data = ProjectManager.Session.get_data()
         data_files = json_data.get("data_files", {})
         tech = json_data.get("core", {}).get("technique", "")
         

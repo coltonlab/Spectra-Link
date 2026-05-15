@@ -8,7 +8,7 @@
         "none_files": [
             {
                 "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\100V EA AFRL Old L-Ala PbI3 #1 16K.xls",
-                "notes": "fdfdfdf\ndfdsjfjsdf\ndfsdf"
+                "notes": ""
             },
             {
                 "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\150V EA AFRL Old L-Ala PbI3 #1 16K.xls",
@@ -79,7 +79,7 @@
     "parameters": {
         "temperature": 16.0,
         "temperature2": 295.0,
-        "author": "Carter"
+        "author": "Carter and Shane"
     },
     "analysis_settings": {
         "smooth_data": false,
