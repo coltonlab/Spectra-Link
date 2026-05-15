@@ -5,51 +5,51 @@
         "schema_version": "1.0.0"
     },
     "data_files": {
+        "none_files": [],
         "voltage_scans": [
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\100V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 100.0,
-                "notes": "fvdfsdfdsf"
+                "notes": "fvdfsdfdsf",
+                "voltage": 100.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\150V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 150.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 150.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\200V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 200.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 200.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\250V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 250.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 250.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\300V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 300.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 300.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\350V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 350.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 350.0
             },
             {
                 "file": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\400V EA AFRL Old L-Ala PbI3 #1 16K.xls",
                 "scan_type": "Voltage",
-                "voltage": 400.0,
-                "notes": ""
+                "notes": "",
+                "voltage": 400.0
             }
         ],
-        "none_files": [],
         "blank_file": {
             "path": "C:\\Users\\carterms\\OneDrive - Brigham Young University\\Documents\\Research\\Spectra-Link\\Data\\2026-05-06\\Blank AFRL Old L-Ala PbI3 #1 295K.xls",
             "notes": ""

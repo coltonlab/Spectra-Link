@@ -1,6 +1,3 @@
-import sys
-import os
-import json
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout,
@@ -12,14 +9,11 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor, QBrush
-import platform
-import re
 
 from config.techniques import TECHNIQUE_CONFIG, SCAN_TYPE_COLORS
-# from ui.dialogs import NewExperimentDialog
 from ui.theme import get_theme
 from utils.project_manager import ProjectManager
-from utils.validators import validate_filename
+from utils.discovery_data_mapper import DiscoveryDataMapper
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Discovery / Selection tab
@@ -409,125 +403,7 @@ class DiscoveryTab(QWidget):
     # ------------------------------------------------------------------ LOAD FROM JSON
     def _load_from_json(self):
         """Populate the table from an existing experiment JSON."""
-        data = ProjectManager.Session.get_data() # Get data from the session
-        if not data: return
-
-        technique = data.get("core", {}).get("technique")
-        if not technique or technique not in TECHNIQUE_CONFIG:
-            return
-
-        cfg         = TECHNIQUE_CONFIG[technique]
-        local_param = cfg.get("local_param")
-        has_local   = local_param is not None
-        local_key   = local_param["key"] if has_local else None
-        key_map     = cfg["json_key_map"]
-        data_files  = data.get("data_files", {})
-        parameters  = data.get("parameters", {})
-
-        # Restore global parameter widget values
-        for key, widget in self._param_widgets.items():
-            val = parameters.get(key)
-            if val is None:
-                continue
-            if isinstance(widget, QDoubleSpinBox):
-                try:
-                    widget.setValue(float(val))
-                except (TypeError, ValueError):
-                    pass
-            elif isinstance(widget, QLineEdit):
-                widget.setText(str(val))
-
-        # Build a list of (relative_path, scan_type, local_value_or_None, notes) tuples
-        entries = []
-
-        # Flat key entries (Blank, Transmission, Reference, Background, Sample)
-        reverse_map = {v: k for k, v in key_map.items()}
-        for json_key, scan_type in reverse_map.items():
-            if json_key == "none_files": continue
-            val = data_files.get(json_key)
-            if val:
-                if isinstance(val, dict):
-                    entries.append((val.get("path", ""), scan_type, None, val.get("notes", "")))
-                else:
-                    entries.append((val, scan_type, None, ""))
-
-        # Local-param scan list (e.g. voltage_scans, temperature_scans)
-        if has_local:
-            list_key = f"{local_key}_scans"
-            for item in data_files.get(list_key, []):
-                if isinstance(item, dict):
-                    entries.append((
-                        item.get("file", ""),
-                        item.get("scan_type", ""),
-                        item.get(local_key, local_param.get("default", 0)),
-                        item.get("notes", "")
-                    ))
-
-        # None files
-        for item in data_files.get("none_files", []):
-            if isinstance(item, dict):
-                entries.append((item.get("path", ""), "None", None, item.get("notes", "")))
-            else:
-                entries.append((item, "None", None, ""))
-
-        if not entries:
-            self.lbl_save_status.setText("No files saved yet.")
-            return
-
-        self.table.blockSignals(True)
-        self.table.setRowCount(0)
-
-        active_scan_types = local_param.get("active_scan_types", []) if has_local else []
-
-        for rel_path, scan_type, local_value, notes_text in entries:
-            full_path = self.parent_window.base_dir / Path(rel_path)
-            fname     = Path(rel_path).name
-            row       = self.table.rowCount()
-            self.table.insertRow(row)
-
-            # Ensure items exist for all columns so background colors and layout work correctly
-            for col_idx in range(self.table.columnCount()):
-                self.table.setItem(row, col_idx, QTableWidgetItem(""))
-
-            # 0: Filename
-            item_name = QTableWidgetItem(fname)
-            item_name.setFlags(item_name.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            if not full_path.exists():
-                T = get_theme(self.parent_window.dark_mode)
-                item_name.setForeground(QBrush(QColor(T.missing_file_fg)))
-                item_name.setToolTip(f"File not found:\n{full_path}")
-            self.table.setItem(row, 0, item_name)
-
-            # 1: Scan Type (Widget)
-            combo = self._make_scan_combo(cfg.get("scan_types", ["None"]), row)
-            idx   = combo.findText(scan_type)
-            if idx >= 0: combo.setCurrentIndex(idx)
-            self.table.setCellWidget(row, 1, combo)
-
-            # 2/3: Local / Notes / Path
-            notes_col = 2
-            if has_local:
-                default_val = local_param.get("default", 0)
-                spin = self._make_local_spin(local_param, value=local_value if local_value is not None else default_val)
-                enabled = scan_type in active_scan_types
-                if not enabled:
-                    spin.setEnabled(False)
-                    spin.setStyleSheet(self._disabled_spin_style())
-                self.table.setCellWidget(row, 2, spin)
-                notes_col = 3
-            
-            # Notes Widget
-            notes_edit = self._make_notes_edit(notes_text)
-            self.table.setCellWidget(row, notes_col, notes_edit)
-
-            # Hidden Path Column
-            path_item = QTableWidgetItem(str(full_path))
-            self.table.setItem(row, self.table.columnCount()-1, path_item)
-
-            self._update_row_color(row, combo.currentText())
-
-        self.table.blockSignals(False)
-        self.table.resizeRowsToContents()
+        DiscoveryDataMapper.load_session_to_ui(self)
         self.lbl_save_status.setText("Loaded from JSON.")
 
     # ------------------------------------------------------------------ ADD FILES
@@ -759,72 +635,8 @@ class DiscoveryTab(QWidget):
         if not self._current_json_path or not self._current_technique:
             return
 
-        # json_path   = self._current_json_path # No longer needed, session manages path
-        technique   = self._current_technique
-        cfg         = TECHNIQUE_CONFIG.get(technique, {})
-        local_param = cfg.get("local_param")
-        has_local   = local_param is not None
-        local_key   = local_param["key"] if has_local else None
-        key_map     = cfg.get("json_key_map", {})
+        DiscoveryDataMapper.sync_ui_to_session(self)
 
-        data = ProjectManager.Session.get_data() # Get the in-memory data from the session
-        if not data:
-            T = get_theme(self.parent_window.dark_mode)
-            self.lbl_save_status.setText("Save failed — read error.")
-            self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px;")
-            return
-
-        # ── core + parameters ─────────────────────────────────────────────────
-        data.setdefault("core", {})["technique"] = technique
-        data.setdefault("parameters", {}).update({
-            key: (widget.value() if isinstance(widget, QDoubleSpinBox) else widget.text())
-            for key, widget in self._param_widgets.items()
-        })
-
-        # ── data_files ────────────────────────────────────────────────────────
-        data["data_files"] = {}
-        if has_local:
-            data["data_files"][f"{local_key}_scans"] = []
-        data["data_files"]["none_files"] = []
-
-        active_scan_types = local_param.get("active_scan_types", []) if has_local else []
-        path_col  = self.table.columnCount() - 1
-        if has_local:
-            local_col = 2
-            notes_col = 3
-        else:
-            local_col = None
-            notes_col = 2
-
-        for row in range(self.table.rowCount()):
-            path_item    = self.table.item(row, path_col)
-            combo_widget = self.table.cellWidget(row, 1)
-            notes_widget = self.table.cellWidget(row, notes_col)
-            if not path_item or not combo_widget or not notes_widget:
-                continue
-
-            full_path = path_item.text()
-            scan_type = combo_widget.currentText()
-            notes_val = notes_widget.toPlainText()
-
-            try:
-                rel = Path(full_path).relative_to(self.parent_window.base_dir).as_posix()
-            except ValueError:
-                rel = full_path
-
-            if has_local and scan_type in active_scan_types:
-                spin      = self.table.cellWidget(row, local_col)
-                local_val = spin.value() if isinstance(spin, QDoubleSpinBox) else 0.0
-                data["data_files"][f"{local_key}_scans"].append({
-                    "file":      rel,
-                    "scan_type": scan_type,
-                    local_key:   local_val,
-                    "notes":     notes_val
-                })
-            elif scan_type == "None":
-                data["data_files"]["none_files"].append({"path": rel, "notes": notes_val})
-            elif scan_type in key_map:
-                data["data_files"][key_map[scan_type]] = {"path": rel, "notes": notes_val}
         # Now save the session data to disk
         if ProjectManager.Session.save():
             T = get_theme(self.parent_window.dark_mode)

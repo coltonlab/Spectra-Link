@@ -242,22 +242,21 @@ class AnalysisTab(QWidget):
     def _get_processor(self, tech: str):
         """Instantiate the correct processor based on the technique name."""
         tech_lower = tech.lower()
+        
+        # Mapping tech keywords to specific processor classes
+        mapping = {
+            "electro": ("processors.ea_processor", "EAProcessor"),
+            "absorption": ("processors.abs_processor", "ABSProcessor"),
+            "circular": ("processors.abs_processor", "ABSProcessor"), # Placeholder
+        }
 
-        if "electro" in tech_lower or tech_lower.startswith("ea"):
-            from processors.ea_processor import EAProcessor
-            return EAProcessor(self.parent_window)
-
-        if "circular" in tech_lower or "cd" in tech_lower:
-            # Placeholder — wire up CDProcessor when ready
-            from processors.abs_processor import ABSProcessor
-            return ABSProcessor(self.parent_window)
-
-        if "photoluminescence" in tech_lower or "pl" in tech_lower:
-            # Placeholder — wire up PLProcessor when ready
-            from processors.abs_processor import ABSProcessor
-            return ABSProcessor(self.parent_window)
-
-        # Default: absorption
+        for key, (module_path, class_name) in mapping.items():
+            if key in tech_lower:
+                module = __import__(module_path, fromlist=[class_name])
+                processor_class = getattr(module, class_name)
+                return processor_class(self.parent_window)
+        
+        # Default fallback
         from processors.abs_processor import ABSProcessor
         return ABSProcessor(self.parent_window)
 

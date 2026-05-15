@@ -1,26 +1,15 @@
-import sys #test comment
+import sys
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QMessageBox
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QColor, QBrush, QPalette
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget
+from PyQt6.QtCore import Qt
 
-# ── Theme system ──────────────────────────────────────────────────────────────
 from ui.theme import get_theme, apply_palette_to_app
 
-# ── Toggle switch ─────────────────────────────────────────────────────────────
-from ui.toggle_switch import ToggleSwitch
-
 # Local Imports from your new folders
-from config.techniques import TECHNIQUE_CONFIG
 from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
-from ui.dialogs import NewExperimentDialog
 from ui.stylesheets import build_stylesheet
-from utils.validators import validate_filename
 from ui.sidebar import SidebarWidget
-from utils.project_manager import ProjectManager
-
-
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Main window
@@ -69,11 +58,9 @@ class SpectraLink(QMainWindow):
 
     def _on_exp_changed(self):
         self.discovery_tab.refresh_target_label()
-        if hasattr(self, 'tabs') and self.tabs.count() > 1:
-            analysis_tab = self.tabs.widget(1)
-            tech = getattr(self.discovery_tab, '_current_technique', None)
-            if analysis_tab and hasattr(analysis_tab, 'rebuild_settings_header') and tech:
-                analysis_tab.rebuild_settings_header(tech)
+        tech = getattr(self.discovery_tab, '_current_technique', None)
+        if tech:
+            self.analysis_tab.rebuild_settings_header(tech)
 
     # ──────────────────────────────────────────────────────────────────────────
     #  Theme
@@ -82,8 +69,7 @@ class SpectraLink(QMainWindow):
         """Slot connected to the ToggleSwitch toggled signal."""
         self.dark_mode = is_dark
         self.apply_theme()
-        if hasattr(self, 'discovery_tab'):
-            self.discovery_tab.apply_theme(is_dark)
+        self.discovery_tab.apply_theme(is_dark)
 
     def apply_theme(self):
         """
@@ -101,9 +87,8 @@ class SpectraLink(QMainWindow):
         #    QInputDialog) also inherit the correct colors
         apply_palette_to_app(QApplication.instance(), self.dark_mode)
 
-        # 3. Update the ToggleSwitch pill colors to match the new theme
-        if hasattr(self, 'sidebar'):
-            self.sidebar.apply_theme(T, self.dark_mode)
+        # 3. Update the Sidebar (includes ToggleSwitch colors)
+        self.sidebar.apply_theme(T, self.dark_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
