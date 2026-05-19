@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy,
+    QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -10,6 +10,7 @@ from pathlib import Path
 
 from utils.project_manager import ProjectManager
 from config.techniques import TECHNIQUE_CONFIG, ANALYSIS_OPTION_META
+from processors.factory import get_processor
  
 
 class AnalysisTab(QWidget):
@@ -36,8 +37,9 @@ class AnalysisTab(QWidget):
     def __init__(self, parent_window):
         super().__init__()
         self.parent_window = parent_window
-        self._checkboxes: dict[str, QCheckBox] = {}   # key → widget
+        self._option_widgets: dict[str, QWidget] = {}   # key → widget
         self._current_technique: str | None = None
+        self._current_processor = None
         self._init_ui()
 
     # ──────────────────────────────────────────────────────────────────────────
@@ -100,7 +102,7 @@ class AnalysisTab(QWidget):
         root.addWidget(sep)
 
         # 3. Plot area ─────────────────────────────────────────────────────────
-        self.figure = Figure(tight_layout=True, facecolor="white")
+        self.figure = Figure(layout='constrained', facecolor="white")
         self.canvas = FigureCanvas(self.figure)
         self.canvas.setSizePolicy(
             QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding
@@ -128,14 +130,21 @@ class AnalysisTab(QWidget):
         Called by the discovery tab whenever the user selects an experiment.
         """
         self._current_technique = technique
-        self._checkboxes.clear()
+        self._option_widgets.clear()
+        self._current_processor = get_processor(technique, self.parent_window)
 
-        # Remove all existing widgets
+        # Remove all existing widgets and sub-layouts (to prevent UI persistence bugs)
         while self._options_layout.count():
             item = self._options_layout.takeAt(0)
-            w = item.widget()
-            if w:
-                w.deleteLater()
+            if item.widget():
+                item.widget().deleteLater()
+            elif item.layout():
+                # Recursively clear sub-layouts (like the one used for the combo box)
+                sub_layout = item.layout()
+                while sub_layout.count():
+                    sub_item = sub_layout.takeAt(0)
+                    if sub_item.widget():
+                        sub_item.widget().deleteLater()
 
         cfg = TECHNIQUE_CONFIG.get(technique, {})
         options: list[str] = cfg.get("analysis_options", [])
@@ -158,27 +167,53 @@ class AnalysisTab(QWidget):
         div.setFrameShadow(QFrame.Shadow.Sunken)
         self._options_layout.addWidget(div)
 
-        # Retrieve saved states from the experiment JSON
-        saved: dict = ProjectManager.Session.get_data().get(
-            "analysis_settings", {}
-        )
+        # Retrieve and initialize saved states from the experiment JSON
+        json_data = ProjectManager.Session.get_data()
+        if "analysis_settings" not in json_data:
+            json_data["analysis_settings"] = {}
+        saved = json_data["analysis_settings"]
+
+        # Ensure all available options are populated in the session data with defaults upon initialization
+        modified = False
+        for key in options:
+            if key not in saved:
+                meta = ANALYSIS_OPTION_META.get(key, {})
+                if meta.get("type") == "combo":
+                    opts = meta.get("options", [])
+                    saved[key] = meta.get("default", opts[0] if opts else "")
+                else:
+                    saved[key] = meta.get("default", False)
+                modified = True
+
+        if modified:
+            ProjectManager.Session.save()
 
         for key in options:
             meta = ANALYSIS_OPTION_META.get(key, {})
-            label_text = meta.get("label", key.replace("_", " ").title())
+            label_text  = meta.get("label", key.replace("_", " ").title())
             tooltip     = meta.get("tooltip", "")
+            widget_type = meta.get("type", "checkbox")
 
-            cb = QCheckBox(label_text)
-            cb.setToolTip(tooltip)
-            cb.setChecked(saved.get(key, False))
+            if widget_type == "combo":
+                # Build a dropdown (e.g., for Colormaps)
+                container = QHBoxLayout()
+                container.addWidget(QLabel(f"{label_text}:"))
+                w = QComboBox()
+                w.addItems(meta.get("options", []))
+                w.setCurrentText(str(saved.get(key, meta.get("default", ""))))
+                w.currentTextChanged.connect(lambda val, k=key: self._on_setting_changed(k, val))
+                container.addWidget(w)
+                self._options_layout.addLayout(container)
+            else:
+                # Standard Checkbox
+                w = QCheckBox(label_text)
+                w.setChecked(saved.get(key, False))
+                w.toggled.connect(lambda chk, k=key: self._on_setting_changed(k, chk))
 
-            # Live replot on toggle
-            cb.toggled.connect(
-                lambda checked, k=key: self._on_option_toggled(k, checked)
-            )
-
-            self._checkboxes[key] = cb
-            self._options_layout.addWidget(cb)
+            w.setToolTip(tooltip)
+            self._option_widgets[key] = w
+            if widget_type != "combo":
+                self._options_layout.addWidget(w)
 
         self._options_layout.addStretch()
 
@@ -192,22 +227,22 @@ class AnalysisTab(QWidget):
     # Checkbox handler
     # ──────────────────────────────────────────────────────────────────────────
 
-    def _on_option_toggled(self, key: str, checked: bool):
-        """Persist checkbox state to JSON then immediately replot."""
+    def _on_setting_changed(self, key: str, value):
+        """Persist setting state to JSON then immediately replot."""
         json_data = ProjectManager.Session.get_data()
         if "analysis_settings" not in json_data:
             json_data["analysis_settings"] = {}
-        json_data["analysis_settings"][key] = checked
+        json_data["analysis_settings"][key] = value
 
         # Persist to disk
         ProjectManager.Session.save()
-
-        # Live replot
         self.execute_plot()
 
     # Public alias used by external callers in the original code
-    def update_setting(self, key: str, value: bool):
-        self._on_option_toggled(key, value)
+    def update_setting(self, key: str, value):
+        self._on_setting_changed(key, value)
+    def _on_option_toggled(self, key: str, checked: bool):
+        self._on_setting_changed(key, checked)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Plotting
@@ -227,38 +262,16 @@ class AnalysisTab(QWidget):
         self.status_label.setText("Processing…")
         self.figure.clear()
 
-        processor = self._get_processor(tech)
-        if processor is None:
+        if self._current_processor is None:
             self.status_label.setText(f"No processor for '{tech}'")
             return
 
-        success = processor.generate_plot(self.figure)
+        success = self._current_processor.generate_plot(self.figure)
         if success:
             self.canvas.draw()
             self.status_label.setText("Plot updated")
         else:
             self.status_label.setText("Error in processing")
-
-    def _get_processor(self, tech: str):
-        """Instantiate the correct processor based on the technique name."""
-        tech_lower = tech.lower()
-        
-        # Mapping tech keywords to specific processor classes
-        mapping = {
-            "electro": ("processors.ea_processor", "EAProcessor"),
-            "absorption": ("processors.abs_processor", "ABSProcessor"),
-            "circular": ("processors.abs_processor", "ABSProcessor"), # Placeholder
-        }
-
-        for key, (module_path, class_name) in mapping.items():
-            if key in tech_lower:
-                module = __import__(module_path, fromlist=[class_name])
-                processor_class = getattr(module, class_name)
-                return processor_class(self.parent_window)
-        
-        # Default fallback
-        from processors.abs_processor import ABSProcessor
-        return ABSProcessor(self.parent_window)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Publication export
@@ -301,7 +314,6 @@ class AnalysisTab(QWidget):
             return
 
         tech = self._current_technique or ""
-        processor = self._get_processor(tech)
-        if processor:
-            processor.save_fixed_plot(self.figure, file_path)
+        if self._current_processor:
+            self._current_processor.save_fixed_plot(self.figure, file_path)
             self.status_label.setText(f"Exported: {Path(file_path).name}")

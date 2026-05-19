@@ -1,112 +1,39 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
-from pathlib import Path
-from processors.public.read_colton_files import read_data_simple
 from utils.project_manager import ProjectManager
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Publication-style Matplotlib settings
-# ──────────────────────────────────────────────────────────────────────────────
-def apply_publication_style():
-    """Sets global Matplotlib parameters for paper-ready plots."""
-    plt.rcParams.update({
-        "font.family":       "serif",
-        "font.serif":        ["Times New Roman"],
-        "font.size":         10,
-        "axes.titlesize":    10,
-        "axes.labelsize":    10,
-        "xtick.labelsize":   8,
-        "ytick.labelsize":   8,
-        "legend.fontsize":   8,
-        "axes.linewidth":    1.2,
-        "lines.linewidth":   1.5,
-        "xtick.direction":   "in",
-        "ytick.direction":   "in",
-        "xtick.major.size":  5,
-        "ytick.major.size":  5,
-        "xtick.top":         True,   # mirror ticks → boxed look
-        "ytick.right":       True,
-        "savefig.dpi":       300,
-        "axes.grid":         False,
-        "figure.facecolor":  "white",
-        "axes.facecolor":    "white",
-    })
-
+from processors.base_processor import BaseProcessor
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Colorblind-friendly, high-contrast on white
-TRACE_COLORS = ["#1f4e79", "#c0392b", "#1a7a4a"]
+PRIMARY_TRACE_COLOR = "#1f4e79"  # Standard dark blue for single absorption plots
 
-class ABSProcessor:
+class ABSProcessor(BaseProcessor):
     SMOOTH_WINDOW = 11   # must be odd
     SMOOTH_POLY   = 3
     OFFSET_STEP   = 0.15  # O.D. units added per trace index when offset is on
 
     def __init__(self, parent_window):
-        self.parent_window = parent_window
-        apply_publication_style()
+        super().__init__(parent_window)
 
     # ── internal helpers ──────────────────────────────────────────────────────
-
-    def _get_settings(self) -> dict:
-        return ProjectManager.Session.get_data().get("analysis_settings", {})
-
-    def _load_data(self, rel_path):
-        """Loads a data file using the public reader and extracts wl/intensity."""
-        if isinstance(rel_path, dict):
-            rel_path = rel_path.get("path") or rel_path.get("file")
-
-        if isinstance(rel_path, Path):
-            rel_path = str(rel_path)
-
-        if not rel_path:
-            return None, None
-        
-        full_path = self.parent_window.base_dir / Path(rel_path)
-        if not full_path.exists():
-            print(f"File not found: {full_path}")
-            return None, None
-
-        try:
-            # read_data_simple returns a dict of numpy arrays (already phased)
-            data_dict = read_data_simple(str(full_path))
-            
-            # Detect columns: look for Spectrometer (WL) and Phased/R (Intensity)
-            wl_key = next((k for k in data_dict.keys() if "Spectr" in k), None)
-            # Use Phased (V) if available (phased by read_data_simple), else R (V)
-            int_key = "Phased (V)" if "Phased (V)" in data_dict else "R (V)"
-            
-            if wl_key and int_key in data_dict:
-                return data_dict[wl_key], data_dict[int_key]
-        except Exception as e:
-            print(f"Error loading {rel_path}: {e}")
-        return None, None
 
     def _load_traces(self):
         """Load traces from the current experiment JSON."""
         json_data = ProjectManager.Session.get_data()
         data_files = json_data.get("data_files", {})
-        tech = json_data.get("core", {}).get("technique", "")
         
         traces = []
 
         # 1. Load Blank/Baseline
-        wl_b, int_b = self._load_data(data_files.get("blank_file"))
+        wl_b, int_b = self.load_raw_data(data_files.get("blank_file"))
 
-        # 2. Identify Sample Traces
-        samples = [] # list of (rel_path, label)
-        if "Series" in tech:
-            # ABS Temp Series uses 'temperature_scans'
-            for entry in data_files.get("temperature_scans", []):
-                samples.append((entry.get("file"), f"{entry.get('temperature')} K"))
-        else:
-            # Standard Absorption
-            samples.append((data_files.get("sample_file"), "Sample"))
+        # 2. Identify Sample Trace
+        samples = [(data_files.get("sample_file"), "Sample")]
 
         # 3. Process each sample into Absorbance
         for rel_path, label in samples:
-            wl_s, int_s = self._load_data(rel_path)
+            wl_s, int_s = self.load_raw_data(rel_path)
             if wl_s is not None:
                 abs_vals = self._calculate_absorbance(wl_s, int_s, wl_b, int_b)
                 traces.append({
@@ -175,20 +102,28 @@ class ABSProcessor:
     def generate_plot(self, figure) -> bool:
         """Draw all traces onto *figure* according to the current settings."""
         try:
-            settings = self._get_settings()
+            settings = self.get_settings()
             ax = figure.add_subplot(111)
 
             use_ev = settings.get("convert_to_ev", False)
 
-            for idx, trace in enumerate(self._load_traces()):
-                x, y = self._process_trace(
-                    trace["wavelengths"],
-                    trace["absorbance"],
-                    settings,
-                    idx,
-                )
-                color = TRACE_COLORS[idx % len(TRACE_COLORS)]
-                ax.plot(x, y, color=color, linewidth=1.5, label=trace["label"])
+            # Get sample and experiment names for the title
+            json_data = ProjectManager.Session.get_data()
+
+            sample_name = json_data.get("core", {}).get("sample_name", "Unknown Sample")
+            experiment_name = json_data.get("core", {}).get("experiment_name", "Unknown Experiment")
+            ax.set_title(f"{sample_name} - {experiment_name}", pad=15)
+
+            if self._raw_traces is None:
+                self._raw_traces = self._load_traces()
+            
+            if not self._raw_traces:
+                return False
+
+            trace = self._raw_traces[0]
+            x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, 0)
+            
+            ax.plot(x, y, color=PRIMARY_TRACE_COLOR, linewidth=1.5, label=trace["label"])
 
             # Axis labels
             if use_ev:
@@ -212,38 +147,11 @@ class ABSProcessor:
             for spine in ax.spines.values():
                 spine.set_linewidth(1.2)
 
-            figure.tight_layout()
             return True
 
         except Exception as e:
             print(f"ABSProcessor.generate_plot error: {e}")
             return False
-
-
-
-
-
-
-
-
-    # ── publication export ────────────────────────────────────────────────────
-    def save_fixed_plot(self, figure, file_path: str):
-        """
-        Re-draws the figure at strict journal dimensions and saves.
-        Single-column width = 3.5 in  |  height = 2.8 in  (4:3 ratio)
-        """
-        orig_size = figure.get_size_inches()
-        figure.set_size_inches(3.5, 2.8)
-        plt.rcParams["font.size"] = 8
-
-        figure.savefig(
-            file_path, dpi=600, bbox_inches="tight", facecolor="white"
-        )
-
-        # Restore UI state
-        figure.set_size_inches(orig_size)
-        plt.rcParams["font.size"] = 10
-
 
 if __name__ == "__main__":
     # This block allows you to test the processor without running the main UI.
@@ -270,18 +178,6 @@ if __name__ == "__main__":
     # Create dummy data if no files provided
     win = MockWindow()
     processor = ABSProcessor(win)
-
-    # # If no files are specified above, we'll override _load_traces for a quick visual test
-    # if win.current_exp_json["data_files"]["sample_file"] is None:
-    #     print("No files specified in MockWindow. Using synthetic data for demonstration.")
-    #     def mock_load():
-    #         wl = np.linspace(350, 800, 200)
-    #         return [{
-    #             "wavelengths": wl,
-    #             "absorbance": 0.5 * np.exp(-((wl-500)/50)**2) + np.random.normal(0, 0.01, 200),
-    #             "label": "Synthetic Test"
-    #         }]
-    #     processor._load_traces = mock_load
 
     fig = plt.figure(figsize=(6, 5))
     success = processor.generate_plot(fig)

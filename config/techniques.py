@@ -28,7 +28,6 @@ TECHNIQUE_CONFIG = {
             "smooth_data",
             "convert_to_ev",
             "normalize_to_peak",
-            "offset_traces",
             "show_legend",
         ],
     },
@@ -57,7 +56,6 @@ TECHNIQUE_CONFIG = {
             "smooth_data",
             "convert_to_ev",
             "normalize_to_peak",
-            "offset_traces",
             "show_legend",
         ],
     },
@@ -90,9 +88,8 @@ TECHNIQUE_CONFIG = {
             "smooth_data",
             "flip_sign",
             "convert_to_ev",
-            "normalize_to_peak",
-            "show_legend",
-            "color_gradient",
+            "show_colorbar",
+            "colormap_name",
         ],
     },
 
@@ -126,7 +123,8 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
-            "color_gradient",
+            "show_colorbar",
+            "colormap_name",
         ],
     },
 
@@ -256,7 +254,7 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "tooltip": "Flip the sign of the differential signal (EA-specific)",
     },
     "convert_to_ev": {
-        "label":   "Convert X → eV",
+        "label":   "nm → eV",
         "tooltip": "Convert the wavelength axis to photon energy using E = 1240 / λ (nm)",
     },
     "normalize_to_peak": {
@@ -268,13 +266,17 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "tooltip": "Add an incremental vertical offset between overlaid traces for clarity",
     },
     "show_legend": {
-        "label":   "Show Legend",
+        "label":   "Legend",
         "tooltip": "Display a legend labelling each trace",
     },
-    "color_gradient": {
-        "label":   "Color Gradient",
+    "show_colorbar": {
+        "label":   "Colorbar",
+        "tooltip": "Toggle the intensity/temperature colorbar on the right",
+    },
+    "colormap_name": {
+        "label":   "Color",
         "tooltip": "Select a color gradient for plotting multiple traces in a series.",
-        "type":    "dropdown",
+        "type":    "combo",
         "options": COLOR_GRADIENTS,
     },
 }

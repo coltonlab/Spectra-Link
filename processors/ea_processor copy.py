@@ -1,24 +1,89 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
+from pathlib import Path
+from processors.public.read_colton_files import read_data_simple
+from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import processors.public.colton_math_functions as cmf
 from utils.project_manager import ProjectManager
-from processors.base_processor import BaseProcessor
 
-class EAProcessor(BaseProcessor): 
+# ──────────────────────────────────────────────────────────────────────────────
+# Publication-style Matplotlib settings
+# ──────────────────────────────────────────────────────────────────────────────
+def apply_publication_style():
+    """Sets global Matplotlib parameters for paper-ready plots."""
+    plt.rcParams.update({
+        "font.family":       "serif",
+        "font.serif":        ["Times New Roman"],
+        "font.size":         10,
+        "axes.titlesize":    10,
+        "axes.labelsize":    10,
+        "xtick.labelsize":   8,
+        "ytick.labelsize":   8,
+        "legend.fontsize":   8,
+        "axes.linewidth":    1.2,
+        "lines.linewidth":   1.5,
+        "xtick.direction":   "in",
+        "ytick.direction":   "in",
+        "xtick.major.size":  5,
+        "ytick.major.size":  5,
+        "xtick.top":         True,   # mirror ticks → boxed look
+        "ytick.right":       True,
+        "savefig.dpi":       300,
+        "axes.grid":         False,
+        "figure.facecolor":  "white",
+        "axes.facecolor":    "white",
+    })
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Colorblind-friendly, high-contrast on white
+# TRACE_COLORS = ["#1f4e79", "#c0392b", "#1a7a4a"] # No longer used, using colormap
+
+class EAProcessor: 
     SMOOTH_WINDOW = 11   # must be odd
     SMOOTH_POLY   = 3
     OFFSET_STEP   = 1.0   # mOD units added per trace index when offset is on
 
     def __init__(self, parent_window):
-        super().__init__(parent_window)
+        self.parent_window = parent_window
+        apply_publication_style()
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
+    def _get_settings(self) -> dict:
+        return ProjectManager.Session.get_data().get("analysis_settings", {})
+
     def _load_data(self, rel_path):
-        """Helper wrapper for BaseProcessor.load_raw_data with EA-specific logic."""
-        wl, intensity = self.load_raw_data(rel_path)
-        return wl, intensity
+        """Loads a data file using the public reader and extracts wl/intensity."""
+        if isinstance(rel_path, dict):
+            rel_path = rel_path.get("path") or rel_path.get("file")
+
+        if isinstance(rel_path, Path):
+            rel_path = str(rel_path)
+
+        if not rel_path:
+            return None, None
+        
+        full_path = self.parent_window.base_dir / Path(rel_path)
+        if not full_path.exists():
+            print(f"File not found: {full_path}")
+            return None, None
+
+        try:
+            # read_data_simple returns a dict of numpy arrays (already phased)
+            data_dict = read_data_simple(str(full_path))
+            
+            # Detect columns: look for Spectrometer (WL) and Phased/R (Intensity)
+            wl_key = next((k for k in data_dict.keys() if "Spectr" in k), None)
+            # Use Phased (V) if available (phased by read_data_simple), else R (V)
+            int_key = "X (V) Phased" if "X (V) Phased" in data_dict else "R (V)"
+            
+            if wl_key and int_key in data_dict:
+                return data_dict[wl_key], data_dict[int_key]
+        except Exception as e:
+            print(f"Error loading {rel_path}: {e}")
+        return None, None
 
     def _load_traces(self):
         """Load traces from the current experiment JSON."""
@@ -113,7 +178,7 @@ class EAProcessor(BaseProcessor):
     def generate_plot(self, figure) -> bool:
         """Draw all traces onto *figure* according to the current settings."""
         try:
-            settings = self.get_settings()
+            settings = self._get_settings()
             ax = figure.add_subplot(111)
 
             use_ev = settings.get("convert_to_ev", False)
@@ -133,18 +198,18 @@ class EAProcessor(BaseProcessor):
             colormap_name = settings.get("colormap_name", "viridis") # Default to 'viridis'
             cmap = plt.get_cmap(colormap_name)
 
-            # Lazy-load physics traces into memory
-            if self._raw_traces is None:
-                self._raw_traces = self._load_traces()
-            
-            num_traces = len(self._raw_traces)
+            # Load traces once for efficiency and color mapping
+            traces = self._load_traces()
+            num_traces = len(traces)
             if num_traces == 0:
                 return False
 
-            vals = [t.get("value", 0) for t in self._raw_traces]
+            # Determine values for the colorbar
+            vals = [t.get("value", 0) for t in traces]
             vmin, vmax = min(vals), max(vals)
             norm = plt.Normalize(vmin=vmin, vmax=vmax)
-            for idx, trace in enumerate(self._raw_traces):
+
+            for idx, trace in enumerate(traces):
                 x, y = self._process_trace(
                     trace["wavelengths"],
                     trace["ea"],
@@ -160,11 +225,11 @@ class EAProcessor(BaseProcessor):
 
                 ax.plot(x, y, color=color, linewidth=1.5, label=trace["label"])
 
-            # Add slender vertical colorbar on the right if enabled
-            if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):
+            # Add inset horizontal colorbar in top-right corner
+            if num_traces > 1 and vmin != vmax:
+                ax_ins = inset_axes(ax, width="30%", height="5%", loc='upper right', borderpad=2)
                 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
-                # pad=0.02 pulls it closer, fraction=0.04 makes it thin, aspect=30 makes it tall
-                cbar = figure.colorbar(sm, ax=ax, orientation='vertical', pad=0.02, fraction=0.04, aspect=30)
+                cbar = figure.colorbar(sm, cax=ax_ins, orientation='horizontal')
                 cb_label = "Voltage (V)" if "Voltage" in tech else "Temp (K)"
                 cbar.set_label(cb_label, fontsize=9)
                 cbar.ax.tick_params(labelsize=8)
@@ -191,6 +256,7 @@ class EAProcessor(BaseProcessor):
             for spine in ax.spines.values():
                 spine.set_linewidth(1.2)
 
+            figure.tight_layout()
             return True
 
         except Exception as e:

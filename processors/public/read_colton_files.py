@@ -13,6 +13,7 @@ from processors.public.colton_math_functions import phase_data, phase_data_exper
 
 # module-level cache
 _all_scan_notes = None
+_data_cache = {}
 
 ''' 
 get_filename is a function that opens All Scan Notes.xlsx and looks for the file names and dates that are listed in there.
@@ -59,6 +60,9 @@ def read_data_simple(file_path):
     Loads data and returns a dictionary of raw NumPy arrays.
     This is much less 'complicated' than passing DataFrames around.
     """
+    if file_path in _data_cache:
+        return _data_cache[file_path]
+
     # 1. Detect Header
     with open(file_path, 'r', encoding="utf-8", errors="ignore") as f:
         first_chunk = f.read(4000)
@@ -106,7 +110,8 @@ def read_data_simple(file_path):
 
     # 5. Convert to a simple dictionary of NumPy arrays
     data_dict = {col: df[col].to_numpy() for col in df.columns}
-    
+
+    _data_cache[file_path] = data_dict
     return data_dict
 
 '''

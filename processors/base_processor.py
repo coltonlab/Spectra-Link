@@ -1,3 +1,4 @@
+import numpy as np
 import matplotlib.pyplot as plt
 from pathlib import Path
 from utils.project_manager import ProjectManager
@@ -8,6 +9,7 @@ class BaseProcessor:
     
     def __init__(self, parent_window):
         self.parent_window = parent_window
+        self._raw_traces = None  # Cache for calculated physics traces
         self.apply_publication_style()
 
     def apply_publication_style(self):
@@ -26,18 +28,29 @@ class BaseProcessor:
 
     def load_raw_data(self, rel_path):
         """Standardized data loader for all children."""
+        # Handle input types (dict from JSON or Path objects)
+        if isinstance(rel_path, dict):
+            rel_path = rel_path.get("path") or rel_path.get("file")
+        
+        if isinstance(rel_path, Path):
+            rel_path = str(rel_path)
+            
         if not rel_path:
             return None, None
         
-        full_path = self.parent_window.base_dir / Path(rel_path)
+        full_path = Path(self.parent_window.base_dir) / Path(rel_path)
         if not full_path.exists():
             return None, None
 
         try:
             data_dict = read_data_simple(str(full_path))
+            keys = list(data_dict.keys())
             wl_key = next((k for k in data_dict.keys() if "Spectr" in k), None)
-            int_key = next((k for k in data_dict.keys() if "Phased" in k or "R (V)" in k), None)
             
+            # Priority list: We want signed data (Phased X) over unsigned magnitude (R)
+            priority = ["X (V) Phased", "X (V) Phased Average", "Phased (V)", "R (V)", "X (V)"]
+            int_key = next((p for p in priority if p in data_dict), None)
+
             if wl_key and int_key:
                 return data_dict[wl_key], data_dict[int_key]
         except Exception as e:
