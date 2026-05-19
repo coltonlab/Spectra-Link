@@ -63,9 +63,12 @@ def read_data_simple(file_path):
     with open(file_path, 'r', encoding="utf-8", errors="ignore") as f:
         first_chunk = f.read(4000)
     
+    is_double = False
     # Detect if we have 2 lock-ins or 1
-    if "X810" in first_chunk:
+    if "X810 (V)" in first_chunk:
+        is_double = True
         header_str = "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)"
+        print("Detected 2 lock-ins in file:", file_path)
     elif "X (V)" in first_chunk:
         header_str = "Digikrom Spectr.:0 (?)	X (V)	Y (V)	R (V)"
     else:
@@ -78,23 +81,33 @@ def read_data_simple(file_path):
     else:
         # Generic load if header detection fails
         df = pd.read_csv(file_path, sep='\t', skiprows=15, skipfooter=3, engine='python')
+        print("Warning: Could not detect header, loaded with generic settings. File:", file_path)
+    
+    # 3. Handle double lock-in selection
+    if is_double:
+        # --- MANUAL TOGGLES ---
+        # Set one to True and the other to False to select the desired lock-in data
+        USE_830 = True
+        USE_810 = False
+        # ----------------------
 
-    # 3. Phase the data while it is still a DataFrame
+        wl_col = "Digikrom Spectr.:0 (?)"
+        if USE_830:
+            # Extract 830 data and rename to generic labels for processing
+            df = df[[wl_col, "X830 (V)", "Y830 (V)", "R830 (V)"]].copy()
+            df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
+        elif USE_810:
+            # Extract 810 data and rename to generic labels for processing
+            df = df[[wl_col, "X810 (V)", "Y810 (V)", "R810 (V)"]].copy()
+            df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
+
+    # 4. Phase the data while it is still a DataFrame
     df = phase_data(df)
 
-    # 4. Convert to a simple dictionary of NumPy arrays
-    # This removes the "Pandas Complexity" for your math functions
+    # 5. Convert to a simple dictionary of NumPy arrays
     data_dict = {col: df[col].to_numpy() for col in df.columns}
     
     return data_dict
-    if "X810" in first_chunk:
-        header_str = "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)"
-    else:
-        header_str = "Digikrom Spectr.:0 (?)	X (V)	Y (V)	R (V)"
-
-    data = read_data_with_dynamic_header(file_path, header=header_str)
-    data = phase_data(data)
-    return data
 
 '''
 read_trans_data reads in the data and phases in accordance to the way the data is outputted.
