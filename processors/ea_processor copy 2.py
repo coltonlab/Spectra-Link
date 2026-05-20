@@ -180,11 +180,13 @@ class EAProcessor:
         try:
             settings = self._get_settings()
             ax = figure.add_subplot(111)
+            ax_abs = None  # Track secondary axis for legend
 
             use_ev = settings.get("convert_to_ev", False)
 
             # Get sample and experiment names for the title
             json_data = ProjectManager.Session.get_data()
+            data_files = json_data.get("data_files", {})
             json_path = ProjectManager.Session.get_path()
             tech = json_data.get("core", {}).get("technique", "")
             if json_path:
@@ -227,6 +229,36 @@ class EAProcessor:
                         linewidth=1.0, alpha=0.4, label=v_lbl if show_lgnd else None, zorder=1
                     )
 
+            # Overlay Absorption Trace (Behind)
+            if settings.get("overlay_absorption"):
+                blank_file = data_files.get("blank_file")
+                dc_file = data_files.get("transmission_file")
+                wl_b, int_b = self._load_data(blank_file)
+                wl_dc, int_dc = self._load_data(dc_file)
+
+                if wl_b is not None and wl_dc is not None:
+                    # Interpolate DC onto Blank wavelengths
+                    int_b_interp = np.interp(wl_dc, wl_b, int_b)
+                    # Calculate Absorbance = -log10(Trans / Blank)
+                    with np.errstate(divide='ignore', invalid='ignore'):
+                        abs_vals = -np.log10(np.where(int_dc/int_b_interp > 0, int_dc/int_b_interp, 1e-9))
+                    
+                    ax_abs = ax.twinx()
+                    
+                    # Process absorption without EA-specific flipping or normalization
+                    abs_settings = settings.copy()
+                    abs_settings.update({"flip_sign": False, "normalize_to_peak": False, "offset_traces": False})
+                    
+                    x_abs, y_abs = self._process_trace(wl_dc, abs_vals, abs_settings, 0)
+                    
+                    # Plot absorption behind EA
+                    ax_abs.plot(x_abs, y_abs, color='gray', linewidth=1.0, alpha=0.3, label='Absorption', zorder=0)
+                    ax_abs.set_ylabel("Absorbance (O.D.)", labelpad=8, color='gray')
+                    ax_abs.tick_params(axis='y', colors='gray', labelsize=8)
+                    
+                    # Move EA axes to the front
+                    ax.set_zorder(ax_abs.get_zorder() + 1)
+                    ax.patch.set_visible(False)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(
                     trace["wavelengths"],
@@ -241,7 +273,7 @@ class EAProcessor:
                 else:
                     color = cmap(idx / (num_traces - 1) if num_traces > 1 else 0.5)
 
-                ax.plot(x, y, color=color, linewidth=1.5)#, label=trace["label"])
+                ax.plot(x, y, color=color, linewidth=1.5, label=trace["label"])
 
             # Add slender vertical colorbar on the right if enabled
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):
@@ -266,9 +298,15 @@ class EAProcessor:
             else:
                 ax.set_ylabel("Electroabsorption (mOD)", labelpad=8)
 
-            # Legend
+            # Unified Legend Handling
             if settings.get("show_legend"):
-                ax.legend(frameon=False, loc="upper right")
+                h1, l1 = ax.get_legend_handles_labels()
+                if ax_abs:
+                    h2, l2 = ax_abs.get_legend_handles_labels()
+                    h1 += h2
+                    l1 += l2
+                if h1:
+                    ax.legend(h1, l1, frameon=False, loc="upper right")
 
             # Boxed spines (rcParams already mirrors ticks on all 4 sides)
             for spine in ax.spines.values():

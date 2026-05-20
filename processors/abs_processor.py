@@ -153,34 +153,34 @@ class ABSProcessor(BaseProcessor):
             print(f"ABSProcessor.generate_plot error: {e}")
             return False
 
-if __name__ == "__main__":
-    # This block allows you to test the processor without running the main UI.
-    class MockWindow:
-        def __init__(self):
-            # Set this to your project root or data root
-            self.base_dir = Path(__file__).parent.parent
+# if __name__ == "__main__":
+#     # This block allows you to test the processor without running the main UI.
+#     class MockWindow:
+#         def __init__(self):
+#             # Set this to your project root or data root
+#             self.base_dir = Path(__file__).parent.parent
             
-            # Example JSON structure as if it were loaded from DiscoveryTab
-            self.current_exp_json = {
-                "core": {"technique": "Absorption"},
-                "data_files": {
-                    "blank_file": "Data\\2026-05-06\\Blank AFRL Old L-Ala PbI3 #1 295K.xls",   # Replace with a real relative path to test
-                    "sample_file": "Data\\2026-05-06\\Transmission AFRL Old L-Ala PbI3 #1 16K.xls",  # Replace with a real relative path to test
-                },
-                "analysis_settings": {
-                    "smooth_data": True,
-                    "show_legend": True,
-                    "convert_to_ev": False
-                }
-            }
-        def save_current_json(self): pass
+#             # Example JSON structure as if it were loaded from DiscoveryTab
+#             self.current_exp_json = {
+#                 "core": {"technique": "Absorption"},
+#                 "data_files": {
+#                     "blank_file": "Data\\2026-05-06\\Blank AFRL Old L-Ala PbI3 #1 295K.xls",   # Replace with a real relative path to test
+#                     "sample_file": "Data\\2026-05-06\\Transmission AFRL Old L-Ala PbI3 #1 16K.xls",  # Replace with a real relative path to test
+#                 },
+#                 "analysis_settings": {
+#                     "smooth_data": True,
+#                     "show_legend": True,
+#                     "convert_to_ev": False
+#                 }
+#             }
+#         def save_current_json(self): pass
 
-    # Create dummy data if no files provided
-    win = MockWindow()
-    processor = ABSProcessor(win)
+#     # Create dummy data if no files provided
+#     win = MockWindow()
+#     processor = ABSProcessor(win)
 
-    fig = plt.figure(figsize=(6, 5))
-    success = processor.generate_plot(fig)
+#     fig = plt.figure(figsize=(6, 5))
+#     success = processor.generate_plot(fig)
     
-    if success:
-        plt.show()
+#     if success:
+#         plt.show()

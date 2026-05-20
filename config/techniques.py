@@ -90,6 +90,9 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "show_colorbar",
             "colormap_name",
+            "show_zero_line",
+            "vertical_lines",
+            "show_legend",
         ],
     },
 
@@ -125,6 +128,9 @@ TECHNIQUE_CONFIG = {
             "show_legend",
             "show_colorbar",
             "colormap_name",
+            "show_zero_line",
+            "vertical_lines",
+            "overlay_absorption",
         ],
     },
 
@@ -244,39 +250,64 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
     "smooth_data": {
         "label":   "Smooth Data",
         "tooltip": "Apply Savitzky-Golay smoothing (window 11, poly 3) to reduce noise",
+        "category": "Preprocessing",
     },
     "flip_y": {
         "label":   "Flip Y-axis",
         "tooltip": "Invert the y-axis — multiply all y values by −1",
+        "category": "Data Correction",
     },
     "flip_sign": {
         "label":   "Flip Sign",
         "tooltip": "Flip the sign of the differential signal (EA-specific)",
+        "category": "Preprocessing",
     },
     "convert_to_ev": {
         "label":   "nm → eV",
         "tooltip": "Convert the wavelength axis to photon energy using E = 1240 / λ (nm)",
+        "category": "Axes",
     },
     "normalize_to_peak": {
         "label":   "Normalize to Peak",
         "tooltip": "Scale each trace so its absolute maximum equals 1",
+        "category": "Preprocessing",
     },
     "offset_traces": {
         "label":   "Offset Traces",
         "tooltip": "Add an incremental vertical offset between overlaid traces for clarity",
+        "category": "Axes",
     },
     "show_legend": {
         "label":   "Legend",
         "tooltip": "Display a legend labelling each trace",
+        "category": "Visualization",
     },
     "show_colorbar": {
         "label":   "Colorbar",
         "tooltip": "Toggle the intensity/temperature colorbar on the right",
+        "category": "Visualization",
     },
     "colormap_name": {
         "label":   "Color",
         "tooltip": "Select a color gradient for plotting multiple traces in a series.",
         "type":    "combo",
         "options": COLOR_GRADIENTS,
+        "category": "Visualization",
+    },
+    "show_zero_line": {
+        "label":   "Show Zero Line",
+        "tooltip": "Draw a horizontal reference line at Y=0",
+        "category": "Visualization",
+    },
+    "vertical_lines": {
+        "label":   "Reference Lines",
+        "tooltip": "Add vertical markers at specific energy values (eV)",
+        "type":    "list_of_dicts",
+        "category": "Visualization",
+    },
+    "overlay_absorption": {
+        "label":   "Overlay Absorption",
+        "tooltip": "Calculate ground-state absorbance from Blank/Transmission and plot on a secondary axis behind EA",
+        "category": "Visualization",
     },
 }

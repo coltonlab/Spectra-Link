@@ -11,6 +11,7 @@ from pathlib import Path
 from utils.project_manager import ProjectManager
 from config.techniques import TECHNIQUE_CONFIG, ANALYSIS_OPTION_META
 from processors.factory import get_processor
+from ui.analysis_settings_panel import AnalysisSettingsPanel, _palette
  
 
 class AnalysisTab(QWidget):
@@ -37,14 +38,11 @@ class AnalysisTab(QWidget):
     def __init__(self, parent_window):
         super().__init__()
         self.parent_window = parent_window
-        self._option_widgets: dict[str, QWidget] = {}   # key → widget
         self._current_technique: str | None = None
         self._current_processor = None
+        self._settings_panel = AnalysisSettingsPanel(self.parent_window)
+        self._settings_panel.settingChanged.connect(self._on_setting_changed)
         self._init_ui()
-
-    # ──────────────────────────────────────────────────────────────────────────
-    # UI construction
-    # ──────────────────────────────────────────────────────────────────────────
 
     def _init_ui(self):
         root = QVBoxLayout(self)
@@ -64,36 +62,39 @@ class AnalysisTab(QWidget):
         self.btn_save = QPushButton("Save for Publication")
         self.btn_save.setStyleSheet("padding: 5px 12px;")
         self.btn_save.clicked.connect(self.save_publication_plot)
+        
+        # Get the panel's palette for consistent accent color
+        is_dark = getattr(self.parent_window, "dark_mode", True)
+        C = _palette(is_dark)
+        
+        self.btn_settings = QPushButton("⚙  Analysis Settings")
+        self.btn_settings.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {C['accent']};
+                color: {C['text_primary']};
+                border: none;
+                font-weight: 600;
+                padding: 5px 12px;
+                border-radius: 4px;
+            }}
+            QPushButton:hover, QPushButton:checked {{
+                background-color: {C['accent_dim']};
+            }}
+        """)
+        self.btn_settings.setCheckable(True)
+        self.btn_settings.clicked.connect(self.toggle_settings_panel)
 
         self.status_label = QLabel("Ready")
         self.status_label.setStyleSheet("color: grey; font-style: italic;")
 
         ctrl_layout.addWidget(self.btn_run)
         ctrl_layout.addWidget(self.btn_save)
+        ctrl_layout.addSpacing(8)
+        ctrl_layout.addWidget(self.btn_settings)
         ctrl_layout.addSpacing(12)
         ctrl_layout.addWidget(self.status_label)
         ctrl_layout.addStretch()
         root.addWidget(ctrl_frame)
-
-        # 2. Options toolbar ───────────────────────────────────────────────────
-        self.options_frame = QFrame()
-        self.options_frame.setFrameShape(QFrame.Shape.StyledPanel)
-        self.options_frame.setSizePolicy(
-            QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed
-        )
-        self._options_layout = QHBoxLayout(self.options_frame)
-        self._options_layout.setContentsMargins(8, 4, 8, 4)
-        self._options_layout.setSpacing(16)
-
-        # Placeholder label shown before any experiment is loaded
-        self._options_placeholder = QLabel(
-            "Select an experiment to see analysis options."
-        )
-        self._options_placeholder.setStyleSheet("color: grey; font-style: italic;")
-        self._options_layout.addWidget(self._options_placeholder)
-        self._options_layout.addStretch()
-
-        root.addWidget(self.options_frame)
 
         # Thin separator
         sep = QFrame()
@@ -120,52 +121,22 @@ class AnalysisTab(QWidget):
 
         root.addWidget(plot_frame, stretch=1)
 
-    # ──────────────────────────────────────────────────────────────────────────
-    # Options toolbar — rebuild when technique changes
-    # ──────────────────────────────────────────────────────────────────────────
+    def toggle_settings_panel(self):
+        if self._settings_panel.isVisible():
+            self._settings_panel.hide()
+        else:
+            # Position it near the button but slightly offset
+            btn_pos = self.btn_settings.mapToGlobal(self.btn_settings.rect().bottomLeft())
+            self._settings_panel.move(btn_pos.x(), btn_pos.y() + 10)
+            self._settings_panel.show()
+        self.btn_settings.setChecked(self._settings_panel.isVisible())
 
     def rebuild_options_toolbar(self, technique: str):
         """
-        Clear old checkboxes and build new ones from TECHNIQUE_CONFIG.
-        Called by the discovery tab whenever the user selects an experiment.
+        Updates the floating settings panel with new technique options.
         """
         self._current_technique = technique
-        self._option_widgets.clear()
         self._current_processor = get_processor(technique, self.parent_window)
-
-        # Remove all existing widgets and sub-layouts (to prevent UI persistence bugs)
-        while self._options_layout.count():
-            item = self._options_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-            elif item.layout():
-                # Recursively clear sub-layouts (like the one used for the combo box)
-                sub_layout = item.layout()
-                while sub_layout.count():
-                    sub_item = sub_layout.takeAt(0)
-                    if sub_item.widget():
-                        sub_item.widget().deleteLater()
-
-        cfg = TECHNIQUE_CONFIG.get(technique, {})
-        options: list[str] = cfg.get("analysis_options", [])
-
-        if not options:
-            lbl = QLabel("No analysis options for this technique.")
-            lbl.setStyleSheet("color: grey; font-style: italic;")
-            self._options_layout.addWidget(lbl)
-            self._options_layout.addStretch()
-            return
-
-        # Section header label
-        header = QLabel(f"{technique} — Analysis Options")
-        header.setStyleSheet("font-weight: bold; padding-right: 8px;")
-        self._options_layout.addWidget(header)
-
-        # Thin vertical divider
-        div = QFrame()
-        div.setFrameShape(QFrame.Shape.VLine)
-        div.setFrameShadow(QFrame.Shadow.Sunken)
-        self._options_layout.addWidget(div)
 
         # Retrieve and initialize saved states from the experiment JSON
         json_data = ProjectManager.Session.get_data()
@@ -173,14 +144,19 @@ class AnalysisTab(QWidget):
             json_data["analysis_settings"] = {}
         saved = json_data["analysis_settings"]
 
+        cfg = TECHNIQUE_CONFIG.get(technique, {})
+        options: list[str] = cfg.get("analysis_options", [])
         # Ensure all available options are populated in the session data with defaults upon initialization
         modified = False
         for key in options:
             if key not in saved:
                 meta = ANALYSIS_OPTION_META.get(key, {})
-                if meta.get("type") == "combo":
+                w_type = meta.get("type", "checkbox")
+                if w_type == "combo":
                     opts = meta.get("options", [])
                     saved[key] = meta.get("default", opts[0] if opts else "")
+                elif w_type == "list_of_dicts":
+                    saved[key] = meta.get("default", [])
                 else:
                     saved[key] = meta.get("default", False)
                 modified = True
@@ -188,34 +164,7 @@ class AnalysisTab(QWidget):
         if modified:
             ProjectManager.Session.save()
 
-        for key in options:
-            meta = ANALYSIS_OPTION_META.get(key, {})
-            label_text  = meta.get("label", key.replace("_", " ").title())
-            tooltip     = meta.get("tooltip", "")
-            widget_type = meta.get("type", "checkbox")
-
-            if widget_type == "combo":
-                # Build a dropdown (e.g., for Colormaps)
-                container = QHBoxLayout()
-                container.addWidget(QLabel(f"{label_text}:"))
-                w = QComboBox()
-                w.addItems(meta.get("options", []))
-                w.setCurrentText(str(saved.get(key, meta.get("default", ""))))
-                w.currentTextChanged.connect(lambda val, k=key: self._on_setting_changed(k, val))
-                container.addWidget(w)
-                self._options_layout.addLayout(container)
-            else:
-                # Standard Checkbox
-                w = QCheckBox(label_text)
-                w.setChecked(saved.get(key, False))
-                w.toggled.connect(lambda chk, k=key: self._on_setting_changed(k, chk))
-
-            w.setToolTip(tooltip)
-            self._option_widgets[key] = w
-            if widget_type != "combo":
-                self._options_layout.addWidget(w)
-
-        self._options_layout.addStretch()
+        self._settings_panel.rebuild(technique, saved)
 
     # ──────────────────────────────────────────────────────────────────────────
     # Alias kept for backward compatibility with existing callers
@@ -236,7 +185,7 @@ class AnalysisTab(QWidget):
 
         # Persist to disk
         ProjectManager.Session.save()
-        self.execute_plot()
+        self.execute_plot(trigger_key=key)
 
     # Public alias used by external callers in the original code
     def update_setting(self, key: str, value):
@@ -248,7 +197,7 @@ class AnalysisTab(QWidget):
     # Plotting
     # ──────────────────────────────────────────────────────────────────────────
 
-    def execute_plot(self):
+    def execute_plot(self, trigger_key: str | None = None):
         """Select the correct processor and redraw the canvas."""
         tech = self._current_technique
         if not tech:
