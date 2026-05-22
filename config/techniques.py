@@ -25,6 +25,9 @@ TECHNIQUE_CONFIG = {
         ],
         "local_param": None,
         "analysis_options": [
+            "show_title",
+            "plot_title",
+            "line_width",
             "smooth_data",
             "convert_to_ev",
             "normalize_to_peak",
@@ -54,6 +57,7 @@ TECHNIQUE_CONFIG = {
         },
         "analysis_options": [
             "smooth_data",
+            "line_width",
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
@@ -85,6 +89,9 @@ TECHNIQUE_CONFIG = {
             "active_scan_types": ["Voltage"],
         },
         "analysis_options": [
+            "show_title",
+            "plot_title",
+            "line_width",
             "smooth_data",
             "flip_sign",
             "convert_to_ev",
@@ -122,6 +129,7 @@ TECHNIQUE_CONFIG = {
         },
         "analysis_options": [
             "smooth_data",
+            "line_width",
             "flip_sign",
             "convert_to_ev",
             "normalize_to_peak",
@@ -280,6 +288,26 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
     "show_legend": {
         "label":   "Legend",
         "tooltip": "Display a legend labelling each trace",
+        "category": "Visualization",
+    },
+    "show_title": {
+        "label":   "Show Title",
+        "tooltip": "Toggle the plot title on or off",
+        "category": "Visualization",
+    },
+    "plot_title": {
+        "label":   "Edit Title",
+        "tooltip": "Custom text for the plot title",
+        "type":    "text",
+        "category": "Visualization",
+    },
+    "line_width": {
+        "label":   "Line Width",
+        "tooltip": "Set the thickness of the plot lines",
+        "type":    "numeric",
+        "min":     0.1,
+        "max":     10.0,
+        "default": 1.5,
         "category": "Visualization",
     },
     "show_colorbar": {

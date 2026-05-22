@@ -642,6 +642,8 @@ class DiscoveryTab(QWidget):
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("✓  Saved")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_success_fg}; font-size: 10px; font-style: italic;")
+            # Notify other tabs of data/metadata changes
+            self.parent_window.experimentDataChanged.emit(str(self._current_json_path))
         else:
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("Save failed — write error.")

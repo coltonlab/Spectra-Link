@@ -1,13 +1,14 @@
 import sys
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, pyqtSignal
 
 from ui.theme import get_theme, apply_palette_to_app
 
 # Local Imports from your new folders
 from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
+from ui.comparison_tab import ComparisonTab
 from ui.stylesheets import build_stylesheet
 from ui.sidebar import SidebarWidget
 
@@ -15,6 +16,10 @@ from ui.sidebar import SidebarWidget
 #  Main window
 # ──────────────────────────────────────────────────────────────────────────────
 class SpectraLink(QMainWindow):
+    # Global signal to notify tabs when any experiment's underlying JSON data has changed.
+    # The string parameter is the absolute path to the modified JSON file.
+    experimentDataChanged = pyqtSignal(str)
+
     def __init__(self):
         super().__init__()
         self.setWindowTitle("SPECTRA-LINK | Research Data Management")
@@ -46,7 +51,8 @@ class SpectraLink(QMainWindow):
         self.analysis_tab = AnalysisTab(self)
         self.tabs.addTab(self.analysis_tab, "Interactive Analysis")
 
-        self.tabs.addTab(QWidget(), "Comparison Basket")
+        self.comparison_tab = ComparisonTab(self)
+        self.tabs.addTab(self.comparison_tab, "Comparison Basket")
         content_layout.addWidget(self.tabs)
         main_layout.addWidget(content, 1)
 

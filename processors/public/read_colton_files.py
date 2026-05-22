@@ -60,8 +60,15 @@ def read_data_simple(file_path):
     Loads data and returns a dictionary of raw NumPy arrays.
     This is much less 'complicated' than passing DataFrames around.
     """
+    if not os.path.exists(file_path):
+        return None
+
+    # Check modification time to see if file has changed since last load
+    mtime = os.path.getmtime(file_path)
     if file_path in _data_cache:
-        return _data_cache[file_path]
+        cached_mtime, cached_data = _data_cache[file_path]
+        if cached_mtime == mtime:
+            return cached_data
 
     # 1. Detect Header
     with open(file_path, 'r', encoding="utf-8", errors="ignore") as f:
@@ -111,7 +118,7 @@ def read_data_simple(file_path):
     # 5. Convert to a simple dictionary of NumPy arrays
     data_dict = {col: df[col].to_numpy() for col in df.columns}
 
-    _data_cache[file_path] = data_dict
+    _data_cache[file_path] = (mtime, data_dict)
     return data_dict
 
 '''

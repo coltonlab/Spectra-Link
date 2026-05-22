@@ -274,6 +274,46 @@ class _ComboRow(QWidget):
         layout.addWidget(lbl)
         layout.addWidget(self.combo)
 
+class _TextRow(QWidget):
+    """A labeled text input row with tight alignment."""
+
+    def __init__(self, label_text: str, C: dict, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        lbl = QLabel(label_text)
+        lbl.setStyleSheet(f"color: {C['text_label']}; font-size: 11px;")
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        self.edit = QLineEdit()
+        self.edit.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+        layout.addWidget(lbl)
+        layout.addWidget(self.edit)
+
+class _SpinRow(QWidget):
+    """A labeled numeric input row."""
+
+    def __init__(self, label_text: str, C: dict, min_v=0.1, max_v=20.0, step=0.1, decimals=1, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        lbl = QLabel(label_text)
+        lbl.setStyleSheet(f"color: {C['text_label']}; font-size: 11px;")
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+
+        self.spin = QDoubleSpinBox()
+        self.spin.setRange(min_v, max_v)
+        self.spin.setSingleStep(step)
+        self.spin.setDecimals(decimals)
+        self.spin.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Fixed)
+
+        layout.addWidget(lbl)
+        layout.addWidget(self.spin)
 
 class _VerticalLinesWidget(QWidget):
     """Dynamic list of X-value spinboxes and Label edits."""
@@ -550,6 +590,24 @@ class AnalysisSettingsPanel(QWidget):
                     v_widget = _VerticalLinesWidget(saved_settings.get(key, []), C)
                     v_widget.changed.connect(lambda val, k=key: self.settingChanged.emit(k, val))
                     section.content_layout.addWidget(v_widget)
+                elif w_type == "numeric":
+                    row = _SpinRow(label_text, C, 
+                                   min_v=meta.get("min", 0.1), 
+                                   max_v=meta.get("max", 20.0),
+                                   step=meta.get("step", 0.1),
+                                   decimals=meta.get("decimals", 1))
+                    row.spin.setValue(float(saved_settings.get(key, meta.get("default", 1.5))))
+                    row.spin.valueChanged.connect(
+                        lambda val, k=key: self.settingChanged.emit(k, val)
+                    )
+                    section.content_layout.addWidget(row)
+                elif w_type == "text":
+                    row = _TextRow(label_text, C)
+                    row.edit.setText(str(saved_settings.get(key, "")))
+                    row.edit.editingFinished.connect(
+                        lambda r=row, k=key: self.settingChanged.emit(k, r.edit.text())
+                    )
+                    section.content_layout.addWidget(row)
                 else:
                     chk = QCheckBox(label_text)
                     chk.setChecked(saved_settings.get(key, False))

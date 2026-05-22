@@ -1,6 +1,7 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
+from pathlib import Path
 from utils.project_manager import ProjectManager
 from processors.base_processor import BaseProcessor
 
@@ -18,9 +19,8 @@ class ABSProcessor(BaseProcessor):
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
-    def _load_traces(self):
+    def _load_traces(self, json_data):
         """Load traces from the current experiment JSON."""
-        json_data = ProjectManager.Session.get_data()
         data_files = json_data.get("data_files", {})
         
         traces = []
@@ -99,31 +99,40 @@ class ABSProcessor(BaseProcessor):
 
     # ── main entry point ──────────────────────────────────────────────────────
 
-    def generate_plot(self, figure) -> bool:
+    def generate_plot(self, figure, ax=None, path=None, **kwargs) -> bool:
         """Draw all traces onto *figure* according to the current settings."""
         try:
-            settings = self.get_settings()
-            ax = figure.add_subplot(111)
+            json_data = self.get_json_data(path)
+            settings = self.get_settings(json_data).copy() # Copy to avoid mutating original
+
+            # Global Overrides (Option 1)
+            if kwargs.get("force_unit") == "eV":
+                settings["convert_to_ev"] = True
+            elif kwargs.get("force_unit") == "nm":
+                settings["convert_to_ev"] = False
+
+            if ax is None:
+                ax = figure.add_subplot(111)
 
             use_ev = settings.get("convert_to_ev", False)
 
-            # Get sample and experiment names for the title
-            json_data = ProjectManager.Session.get_data()
-
-            sample_name = json_data.get("core", {}).get("sample_name", "Unknown Sample")
-            experiment_name = json_data.get("core", {}).get("experiment_name", "Unknown Experiment")
-            ax.set_title(f"{sample_name} - {experiment_name}", pad=15)
-
-            if self._raw_traces is None:
-                self._raw_traces = self._load_traces()
+            # Title handling
+            if settings.get("show_title", True):
+                title = settings.get("plot_title", "")
+                if title and title != "False":
+                    ax.set_title(title, pad=15)
             
-            if not self._raw_traces:
+            traces = self._load_traces(json_data)
+            if not traces:
                 return False
 
-            trace = self._raw_traces[0]
+            trace = traces[0]
             x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, 0)
-            
-            ax.plot(x, y, color=PRIMARY_TRACE_COLOR, linewidth=1.5, label=trace["label"])
+
+            lw = settings.get("line_width", kwargs.get("line_width", 1.5))
+            # Use color from analysis settings if defined, else default blue
+            color = settings.get("trace_color", PRIMARY_TRACE_COLOR)
+            ax.plot(x, y, color=color, linewidth=lw, label=trace["label"])
 
             # Axis labels
             if use_ev:
@@ -140,8 +149,9 @@ class ABSProcessor(BaseProcessor):
                 ax.set_ylabel("Absorbance (O.D.)", labelpad=8)
 
             # Legend
-            if settings.get("show_legend"):
-                ax.legend(frameon=False, loc="upper right")
+            # Respect global override for showing individual legends (Option 3)
+            if kwargs.get("show_legend", settings.get("show_legend")):
+                ax.legend(frameon=False, loc="upper right", fontsize=8)
 
             # Boxed spines (rcParams already mirrors ticks on all 4 sides)
             for spine in ax.spines.values():

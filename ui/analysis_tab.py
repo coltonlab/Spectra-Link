@@ -157,6 +157,8 @@ class AnalysisTab(QWidget):
                     saved[key] = meta.get("default", opts[0] if opts else "")
                 elif w_type == "list_of_dicts":
                     saved[key] = meta.get("default", [])
+                elif w_type == "text":
+                    saved[key] = meta.get("default", "")
                 else:
                     saved[key] = meta.get("default", False)
                 modified = True
@@ -185,6 +187,10 @@ class AnalysisTab(QWidget):
 
         # Persist to disk
         ProjectManager.Session.save()
+        
+        # Notify other tabs (Comparison Basket) that this experiment's settings changed
+        self.parent_window.experimentDataChanged.emit(str(ProjectManager.Session.get_path()))
+
         self.execute_plot(trigger_key=key)
 
     # Public alias used by external callers in the original code

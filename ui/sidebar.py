@@ -1,9 +1,11 @@
 from pathlib import Path
 from PyQt6.QtWidgets import (
     QFrame, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
-    QPushButton, QCheckBox, QInputDialog, QMessageBox, QMenu
+    QPushButton, QCheckBox, QInputDialog, QMessageBox, QMenu,
+    QApplication
 )
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
+from PyQt6.QtGui import QDrag, QPixmap, QPainter, QColor
 
 from ui.theme import get_theme
 from ui.toggle_switch import ToggleSwitch
@@ -24,6 +26,7 @@ class SidebarWidget(QFrame):
         self.parent_window = parent_window
         self.setObjectName("sidebar")
         self.setFixedWidth(220)
+        self._drag_start_pos = None
         self._init_ui()
 
     def _init_ui(self):
@@ -102,6 +105,11 @@ class SidebarWidget(QFrame):
 
         layout.addStretch()
 
+        layout.addSpacing(12)
+        self.btn_report_bug = QPushButton("🐞  Report Bug / Feedback")
+        self.btn_report_bug.setObjectName("btn_report_bug")
+        self.btn_report_bug.clicked.connect(self._on_report_bug)
+        layout.addWidget(self.btn_report_bug)
         # ── Context menus ─────────────────────────────────────────────────────
         self.combo_collab.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
         self.combo_sample.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
@@ -118,6 +126,9 @@ class SidebarWidget(QFrame):
         self.combo_sample.currentIndexChanged.connect(self.update_experiments)
         self.combo_exp.currentIndexChanged.connect(self.experimentChanged.emit)
 
+        # Enable drag and drop functionality for the experiment selection
+        self.combo_exp.installEventFilter(self)
+
     def apply_theme(self, T, dark_mode: bool):
         self.dark_mode_toggle.updateThemeColors(
             color_on=T.toggle_track_on,
@@ -125,6 +136,75 @@ class SidebarWidget(QFrame):
             thumb_color=T.toggle_thumb,
             label_color=T.text_primary,
         )
+
+    # ------------------------------------------------------------------ DRAG & DROP
+    def eventFilter(self, source, event):
+        """
+        Intercepts mouse events on combo_exp to handle dragging.
+        This is more reliable than overriding mouseMoveEvent on the sidebar itself,
+        as the ComboBox typically consumes its own mouse events.
+        """
+        if source is self.combo_exp:
+            if event.type() == event.Type.MouseButtonPress:
+                if event.button() == Qt.MouseButton.LeftButton:
+                    self._drag_start_pos = event.pos()
+                    return True  # Intercept the press to prevent the dropdown from opening immediately
+
+            elif event.type() == event.Type.MouseMove:
+                if not (event.buttons() & Qt.MouseButton.LeftButton) or self._drag_start_pos is None:
+                    return False
+                
+                # Only start dragging if the mouse has moved far enough
+                if (event.pos() - self._drag_start_pos).manhattanLength() < QApplication.startDragDistance():
+                    return False
+                
+                # Store pos and reset state before executing drag to avoid double-triggering
+                pos = self._drag_start_pos
+                self._drag_start_pos = None 
+                self._execute_drag(pos)
+                return True # Consume event so the dropdown doesn't pop up during drag
+
+            elif event.type() == event.Type.MouseButtonRelease:
+                if event.button() == Qt.MouseButton.LeftButton and self._drag_start_pos is not None:
+                    # If we released the button and never moved far enough to drag,
+                    # NOW we show the dropdown.
+                    self._drag_start_pos = None
+                    source.showPopup()
+                    return True
+                self._drag_start_pos = None
+                
+        return super().eventFilter(source, event)
+
+    def _execute_drag(self, event_pos):
+        """Constructs the payload and starts the drag operation."""
+        collab = self.combo_collab.currentText()
+        sample = self.combo_sample.currentText()
+        exp    = self.combo_exp.currentText()
+        
+        if not (collab and sample and exp):
+            return
+
+        json_path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
+        
+        drag = QDrag(self)
+        mime_data = QMimeData()
+        mime_data.setText(str(json_path))  # The 'payload' is the absolute path to the JSON
+        drag.setMimeData(mime_data)
+        
+        # Visual Cue: Create a 'ghost' snapshot of the widget
+        pixmap = self.combo_exp.grab()
+        
+        # Optional: Make the ghost image semi-transparent for a cleaner look
+        painter = QPainter(pixmap)
+        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
+        painter.fillRect(pixmap.rect(), QColor(0, 0, 0, 150)) # 150/255 opacity
+        painter.end()
+
+        drag.setPixmap(pixmap)
+        drag.setHotSpot(event_pos)
+        
+        self._drag_start_pos = None # Reset state
+        drag.exec(Qt.DropAction.CopyAction)
 
     # ------------------------------------------------------------------ ROOT LOGIC
     def update_root(self):
@@ -147,6 +227,11 @@ class SidebarWidget(QFrame):
         
         self.refresh_dropdown(self.combo_collab, self.parent_window.base_dir / "SpectraLink_Data")
         self.update_samples()
+
+    def _on_report_bug(self):
+        from ui.bug_report_dialog import BugReportDialog
+        dlg = BugReportDialog(self.parent_window)
+        dlg.exec()
 
     def refresh_connection(self):
         try:
@@ -222,7 +307,7 @@ class SidebarWidget(QFrame):
                 QMessageBox.warning(self, "Invalid Name", err)
                 return
             
-            name = name.strip().replace(" ", "_")
+            # name = name.strip().replace(" ", "_")
             try:
                 path = self.parent_window.base_dir / "SpectraLink_Data"
                 if level == "collab": ProjectManager.create_folder(path / name)
@@ -269,6 +354,8 @@ class SidebarWidget(QFrame):
         delete_act = menu.addAction(f"Delete '{current_name}'") if level == "exp" else None
         
         action = menu.exec(combo.mapToGlobal(pos))
+        if not action: return
+
         if action == rename_act:
             if level == "collab": self._rename_collab(current_name)
             elif level == "sample": self._rename_sample(current_name)
@@ -316,3 +403,55 @@ class SidebarWidget(QFrame):
             self.update_experiments()
             self.experimentChanged.emit()
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
+
+    def select_path(self, json_path: Path):
+        """
+        Programmatically sets the sidebar dropdowns to select a specific experiment.
+        This will trigger the experimentChanged signal, updating Discovery and Analysis tabs.
+        """
+        try:
+            # Extract parts from the JSON path
+            # Example: Data/SpectraLink_Data/Collaborator/Sample/JSON/Experiment.json
+            exp_name = json_path.stem
+            # The parent of the JSON file is 'JSON', its parent is 'Sample', its parent is 'Collaborator'
+            sample_name = json_path.parent.parent.name
+            collab_name = json_path.parent.parent.parent.name
+
+            # Block signals to prevent multiple updates during programmatic selection
+            self.combo_collab.blockSignals(True)
+            self.combo_sample.blockSignals(True)
+            self.combo_exp.blockSignals(True)
+
+            # Set Collaborator
+            idx_collab = self.combo_collab.findText(collab_name)
+            if idx_collab != -1:
+                self.combo_collab.setCurrentIndex(idx_collab)
+            else:
+                print(f"Warning: Collaborator '{collab_name}' not found in sidebar.")
+                return
+
+            # Update samples and set Sample
+            self.update_samples() # This populates combo_sample based on combo_collab
+            idx_sample = self.combo_sample.findText(sample_name)
+            if idx_sample != -1:
+                self.combo_sample.setCurrentIndex(idx_sample)
+            else:
+                print(f"Warning: Sample '{sample_name}' not found for '{collab_name}'.")
+                return
+
+            # Update experiments and set Experiment
+            self.update_experiments() # This populates combo_exp based on combo_sample
+            idx_exp = self.combo_exp.findText(exp_name)
+            if idx_exp != -1:
+                self.combo_exp.setCurrentIndex(idx_exp)
+            else:
+                print(f"Warning: Experiment '{exp_name}' not found for '{sample_name}'.")
+                return
+
+        finally:
+            # Always unblock signals, even if an error occurred
+            self.combo_collab.blockSignals(False)
+            self.combo_sample.blockSignals(False)
+            self.combo_exp.blockSignals(False)
+            # Emit the signal once after all changes are made
+            self.experimentChanged.emit()
