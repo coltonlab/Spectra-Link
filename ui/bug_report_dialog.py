@@ -24,6 +24,11 @@ class BugReportDialog(QDialog):
         layout.setContentsMargins(15, 15, 15, 15)
         layout.setSpacing(10)
 
+        layout.addWidget(QLabel("<b>Your Name</b>"))
+        self.edit_name = QLineEdit()
+        self.edit_name.setPlaceholderText("Enter your name")
+        layout.addWidget(self.edit_name)
+
         layout.addWidget(QLabel("<b>Summary</b> (Short description of the problem)"))
         self.edit_title = QLineEdit()
         self.edit_title.setPlaceholderText("e.g., Analysis tab fails to plot Absorption data")
@@ -79,6 +84,7 @@ class BugReportDialog(QDialog):
         return "\n".join(metadata)
 
     def submit_report(self):
+        user_name = self.edit_name.text().strip()
         title = self.edit_title.text().strip()
         desc = self.edit_desc.toPlainText().strip()
 
@@ -91,6 +97,7 @@ class BugReportDialog(QDialog):
 
         form_url = "https://docs.google.com/forms/d/e/1FAIpQLSfJUl8rIidPxycUJ0R_K-BgKiWs8vPxmSrDrAVJtjufXXN6sw/formResponse"
         payload = {
+            "entry.1755151959": user_name,
             "entry.152593343": title,
             "entry.1436956166": desc,
             "entry.516745869": self._get_metadata()

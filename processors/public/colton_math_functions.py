@@ -10,7 +10,7 @@ from scipy.interpolate import CubicSpline
 '''Calculates the EA signal with the input ea data and transmission data '''
 def EA(voltage_X, trans):
     # Assumes inputs are now raw NumPy arrays
-    return -np.log(1 + voltage_X / trans) * 1000
+    return np.log(1 + voltage_X / trans) * 1000 # Removed negetive sign due to phase shift in the data, this is just a convention and can be changed back if desired.
 
 '''Calculates the EA signal with the input ea data and transmission data '''
 def EA_smooth(voltage_X, trans):
