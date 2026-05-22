@@ -1,3 +1,6 @@
 *.pyc
 /Data/
 _pycache_/
+build/
+dist/
+*.zip

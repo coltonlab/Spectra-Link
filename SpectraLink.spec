@@ -5,7 +5,14 @@ from PyInstaller.utils.hooks import collect_all
 # Collect all hidden dependencies for the scientific stack
 datas = []
 binaries = []
-hiddenimports = ['scipy.signal', 'pandas', 'PyQt6', 'matplotlib.backends.backend_qt6agg']
+hiddenimports = [
+    'scipy.signal', 
+    'pandas', 
+    'PyQt6', 
+    'matplotlib.backends.backend_qt6agg', 
+    'requests',
+    'ui.bug_report_dialog'
+]
 
 for pkg in ['scipy', 'pandas', 'matplotlib']:
     tmp_ret = collect_all(pkg)

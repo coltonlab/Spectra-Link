@@ -4,6 +4,17 @@
 
 Spectra-Link is a robust, Python-based graphical environment tailored for physics and materials science researchers. It provides a seamless interface to organize, process, and dynamically visualize complex spectroscopic datasets, bridging the gap between local data processing and remote laboratory network servers.
 
+## 🚀 Download the Latest Version
+
+You can download the latest stable release of Spectra-Link from our GitHub Releases page.
+
+*   **Windows:** [Download Spectra-Link v1.0.0 for Windows](https://github.com/coltonlab/Spectra-Link/releases/download/v1.0.0/SpectraLink-Windows-v1.0.0.zip)
+*   **macOS:** [Download Spectra-Link v1.0.0 for macOS](https://github.com/coltonlab/Spectra-Link/releases/download/v1.0.0/SpectraLink-macOS-v1.0.0.zip)
+
+---
+**Looking for older versions or release notes?** Visit the [Releases page](https://github.com/coltonlab/Spectra-Link/releases).
+
+
 ---
 
 ## ✨ Key Features
