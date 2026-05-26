@@ -19,17 +19,22 @@ class ABSProcessor(BaseProcessor):
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
-    def _load_traces(self, json_data):
+    def _load_traces(self, json_data, json_path=None):
         """Load traces from the current experiment JSON."""
         data_files = json_data.get("data_files", {})
         
+        # Extract the "Global Sample Name" from the experiment's folder structure
+        # Structure: .../SpectraLink_Data/Collaborator/SampleName/JSON/Experiment.json
+        target_path = json_path or self.data_path
+        label = Path(target_path).parent.parent.name if target_path else "Sample"
+
         traces = []
 
         # 1. Load Blank/Baseline
         wl_b, int_b = self.load_raw_data(data_files.get("blank_file"))
 
         # 2. Identify Sample Trace
-        samples = [(data_files.get("sample_file"), "Sample")]
+        samples = [(data_files.get("sample_file"), label)]
 
         # 3. Process each sample into Absorbance
         for rel_path, label in samples:
@@ -104,6 +109,7 @@ class ABSProcessor(BaseProcessor):
         try:
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data).copy() # Copy to avoid mutating original
+            json_path = path or self.data_path
 
             # Global Overrides (Option 1)
             if kwargs.get("force_unit") == "eV":
@@ -122,7 +128,7 @@ class ABSProcessor(BaseProcessor):
                 if title and title != "False":
                     ax.set_title(title, pad=15)
             
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, json_path)
             if not traces:
                 return False
 
