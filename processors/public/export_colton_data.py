@@ -54,7 +54,7 @@ def Export_EA_series_data(data, filename, smooth_abs=False, smooth_ea=False, rem
 
     # Export to CSV
     if remote:
-        df.to_csv(f"'\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
+        df.to_csv(f"\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
     else:
         df.to_csv(f"C:\\Data\\Compiled Data\\{filename}", index=False)
 
@@ -109,7 +109,7 @@ def Export_ER_series_data(data, filename, smooth_abs=False, smooth_ea=False, rem
 
     # Export to CSV
     if remote:
-        df.to_csv(f"'\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
+        df.to_csv(f"\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
     else:
         df.to_csv(f"C:\\Data\\Compiled Data\\{filename}", index=False)
 
@@ -137,7 +137,7 @@ def Export_ABS_temp_data(data, filename, smooth=False, remote=False):
 
     # Export to CSV
     if remote:
-        df.to_csv(f"'\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
+        df.to_csv(f"\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
     else:
         df.to_csv(f"C:\\Data\\Compiled Data\\{filename}", index=False)
 
@@ -171,7 +171,7 @@ def Export_EA_temp_data(data, filename, smooth=False, remote=False, flip=False, 
 
     # Export to CSV
     if remote:
-        df.to_csv(f"'\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
+        df.to_csv(f"\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
     else:
         df.to_csv(f"C:\\Data\\Compiled Data\\{filename}", index=False)
 
@@ -204,7 +204,7 @@ def Export_CD_temp_data(data, filename, smooth=False, remote=False, flip=False, 
 
     # Export to CSV
     if remote:
-        df.to_csv(f"'\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
+        df.to_csv(f"\\2.coltonlab.byu.edu\\C$\\Data\\Compiled Data\\{filename}", index=False)
     else:
         df.to_csv(f"C:\\Data\\Compiled Data\\{filename}", index=False)
 

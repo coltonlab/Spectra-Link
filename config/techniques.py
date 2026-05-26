@@ -28,8 +28,10 @@ TECHNIQUE_CONFIG = {
             "show_title",
             "plot_title",
             "line_width",
+            "trace_color",
             "smooth_data",
             "convert_to_ev",
+            "vertical_lines",
             "normalize_to_peak",
             "show_legend",
         ],
@@ -175,6 +177,8 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
+            "trace_color",
+            "vertical_lines",
         ],
     },
 
@@ -220,6 +224,21 @@ SCAN_TYPE_COLORS = {
     "Sample":       ("#2b3d5c", "#d5e1f0"),  # Soft Blue
     "None":         ("#2a2a2a", "#f3f2f2"),  # Dark Gray / Light Gray
 }
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Predefined single colors for plotting
+# ──────────────────────────────────────────────────────────────────────────────
+TRACE_COLORS = [
+    "black",
+    "red",
+    "blue",
+    "green",
+    "orange",
+    "purple",
+    "brown",
+    "pink",
+    "gray",
+]
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Predefined color gradients for plotting
@@ -308,6 +327,13 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "min":     0.1,
         "max":     10.0,
         "default": 1.5,
+        "category": "Visualization",
+    },
+    "trace_color": {
+        "label":   "Trace Color",
+        "tooltip": "Select the color for the plot line",
+        "type":    "combo",
+        "options": TRACE_COLORS,
         "category": "Visualization",
     },
     "show_colorbar": {

@@ -1,9 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 import os
+import sys
 from PyInstaller.utils.hooks import collect_all
 
+# Detect the operating system and set the correct icon from the Images folder
+if sys.platform == 'win32':
+    icon_file = os.path.join('Images', 'SpectraLink_Icon.ico')
+elif sys.platform == 'darwin':
+    icon_file = os.path.join('Images', 'SpectraLink_Icon.icns')
+else:
+    icon_file = None
+
+
 # Collect all hidden dependencies for the scientific stack
-datas = []
+datas = [('Images', 'Images')]
 binaries = []
 hiddenimports = [
     'scipy.signal', 
@@ -43,6 +53,7 @@ exe = EXE(
     a.scripts,
     [],
     exclude_binaries=True,
+    icon=icon_file,
     name='SpectraLink',
     debug=False,
     bootloader_ignore_signals=False,

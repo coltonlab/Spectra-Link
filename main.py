@@ -1,7 +1,9 @@
 import sys
+import os
 from pathlib import Path
 from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget
 from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtGui import QIcon
 
 from ui.theme import get_theme, apply_palette_to_app
 
@@ -11,6 +13,15 @@ from ui.analysis_tab import AnalysisTab
 from ui.comparison_tab import ComparisonTab
 from ui.stylesheets import build_stylesheet
 from ui.sidebar import SidebarWidget
+
+# ──────────────────────────────────────────────────────────────────────────────
+def resource_path(relative_path):
+    """ Get absolute path to resource, works for dev and for PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+    return os.path.join(base_path, relative_path)
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Main window
@@ -27,6 +38,13 @@ class SpectraLink(QMainWindow):
         self.base_dir = Path("Data")
         self.dark_mode = True
         self.init_ui()
+
+        # Set Window Icon using platform-specific format from the bundled Images folder
+        icon_ext = 'ico' if sys.platform == 'win32' else 'icns'
+        icon_path = resource_path(os.path.join('Images', f'SpectraLink_Icon.{icon_ext}'))
+        
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
 
     # ------------------------------------------------------------------ INIT UI
     def init_ui(self):

@@ -126,6 +126,20 @@ class ABSProcessor(BaseProcessor):
             if not traces:
                 return False
 
+            # Add vertical reference lines if configured
+            v_lines = settings.get("vertical_lines") or []
+            for line in (v_lines if isinstance(v_lines, list) else []):
+                vx = line.get("x")
+                v_lbl = line.get("label", "")
+                show_lgnd = line.get("show_legend", True)
+                if vx is not None and vx > 0:
+                    # Apply unit conversion if necessary (input is assumed eV)
+                    plot_x = vx if use_ev else 1240.0 / vx
+                    ax.axvline(
+                        plot_x, color='black', linestyle='--', 
+                        linewidth=1.0, alpha=0.4, label=v_lbl if show_lgnd else None, zorder=1
+                    )
+
             trace = traces[0]
             x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, 0)
 
