@@ -18,6 +18,12 @@ class ProjectManager:
             return cls._cached_data
 
         @classmethod
+        def clear(cls):
+            """Resets the active session."""
+            cls._current_path = None
+            cls._cached_data = {}
+
+        @classmethod
         def get_data(cls) -> dict:
             """Retrieves the current session data."""
             return cls._cached_data

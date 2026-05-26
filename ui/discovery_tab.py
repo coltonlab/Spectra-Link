@@ -369,19 +369,21 @@ class DiscoveryTab(QWidget):
     def refresh_target_label(self):
         """Called by main window whenever sidebar selection changes.
         Reloads the table from the JSON of the selected experiment."""
-        pw     = self.parent_window
-        collab = pw.sidebar.combo_collab.currentText()
-        sample = pw.sidebar.combo_sample.currentText()
-        exp    = pw.sidebar.combo_exp.currentText()
+        pw = self.parent_window
+        json_path = ProjectManager.Session.get_path()
 
-        if collab and sample and exp:
-            self.lbl_target.setText(f"Target →  {collab}  /  {sample}  /  {exp}.json")
+        if json_path:
+            # Extract display names from the file path
+            exp_name = json_path.stem
+            sample_name = json_path.parent.parent.name
+            collab_name = json_path.parent.parent.parent.name
+
+            self.lbl_target.setText(f"Target →  {collab_name}  /  {sample_name}  /  {exp_name}.json")
             T = get_theme(pw.dark_mode)
             self.lbl_target.setStyleSheet(f"color: {T.target_exp_fg}; font-style: normal; font-size: 11px;")
             
-            json_path = pw.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
             self._current_json_path = json_path
-            data = ProjectManager.Session.load_experiment(json_path)
+            data = ProjectManager.Session.get_data()
             
             technique = data.get("core", {}).get("technique")
             self._current_technique = technique

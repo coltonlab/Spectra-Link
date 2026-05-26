@@ -189,8 +189,8 @@ class ComparisonTab(QWidget):
 
     def _remove_single_experiment(self, rc, path_str):
         """Removes a single experiment from a specific grid cell."""
-        if rc in self.grid_data and path in self.grid_data[rc]:
-            self.grid_data[rc].remove(path)
+        if rc in self.grid_data and path_str in self.grid_data[rc]:
+            self.grid_data[rc].remove(path_str)
             # If the list for this cell becomes empty, remove the key from grid_data
             if not self.grid_data[rc]:
                 del self.grid_data[rc]
@@ -228,6 +228,7 @@ class ComparisonTab(QWidget):
         
         if path_str not in self.grid_data[key]:
             self.grid_data[key].append(path_str)
+            event.acceptProposedAction()
             self.rebuild_plots()
 
     def rebuild_plots(self):

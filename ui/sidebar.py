@@ -1,11 +1,11 @@
 from pathlib import Path
 from PyQt6.QtWidgets import (
-    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, 
+    QFrame, QVBoxLayout, QHBoxLayout, QLabel, QComboBox, QTreeView,
     QPushButton, QCheckBox, QInputDialog, QMessageBox, QMenu,
     QApplication
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint
-from PyQt6.QtGui import QDrag, QPixmap, QPainter, QColor
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint, QObject, QThread, pyqtSlot, QModelIndex
+from PyQt6.QtGui import QDrag, QPixmap, QPainter, QColor, QStandardItemModel, QStandardItem
 
 from ui.theme import get_theme
 from ui.toggle_switch import ToggleSwitch
@@ -14,12 +14,57 @@ from utils.validators import validate_filename
 from utils.network_service import NetworkService
 from utils.project_manager import ProjectManager
 
+class ScanningWorker(QObject):
+    """Handles blocking I/O operations for the sidebar in a background thread."""
+    resultReady = pyqtSignal(str, object)  # task_id, data
+    errorOccurred = pyqtSignal(str)
+
+    @pyqtSlot(str, dict)
+    def execute_task(self, task_id, params):
+        try:
+            if task_id == "RESOLVE_ROOT":
+                # 1. Get Hosts
+                hosts = []
+                if params.get("is_remote"):
+                    hosts = NetworkService.get_available_hosts()
+                
+                # 2. Resolve Base Dir
+                base_dir = NetworkService.resolve_base_dir(
+                    params.get("host"), params.get("is_remote")
+                )
+                
+                # 3. List Collaborators
+                data_root = base_dir / "SpectraLink_Data"
+                tree_data = {}
+                
+                if data_root.exists():
+                    collabs = ProjectManager.list_folders(data_root)
+                    for c in collabs:
+                        c_path = data_root / c
+                        tree_data[c] = {}
+                        samples = ProjectManager.list_folders(c_path)
+                        for s in samples:
+                            s_path = c_path / s
+                            json_dir = s_path / "JSON"
+                            exps = ProjectManager.list_experiments(json_dir) if json_dir.exists() else []
+                            tree_data[c][s] = exps
+                
+                self.resultReady.emit(task_id, {
+                    "hosts": hosts, 
+                    "base_dir": base_dir, 
+                    "tree_data": tree_data
+                })
+
+        except Exception as e:
+            self.errorOccurred.emit(str(e))
+
 class SidebarWidget(QFrame):
     """
     Encapsulates the left sidebar: networking, theme toggle, 
     and data navigation (Collaborator -> Sample -> Experiment).
     """
     experimentChanged = pyqtSignal()
+    requestTask = pyqtSignal(str, dict) # task_id, params
 
     def __init__(self, parent_window):
         super().__init__()
@@ -27,6 +72,18 @@ class SidebarWidget(QFrame):
         self.setObjectName("sidebar")
         self.setFixedWidth(220)
         self._drag_start_pos = None
+        
+        # Initialize Background Threading
+        self.scanning_thread = QThread()
+        self.worker = ScanningWorker()
+        self.worker.moveToThread(self.scanning_thread)
+        
+        # Connect worker signals
+        self.requestTask.connect(self.worker.execute_task)
+        self.worker.resultReady.connect(self._handle_worker_result)
+        self.worker.errorOccurred.connect(self._handle_worker_error)
+        self.scanning_thread.start()
+
         self._init_ui()
 
     def _init_ui(self):
@@ -76,58 +133,36 @@ class SidebarWidget(QFrame):
         layout.addWidget(QLabel("<b>Data Navigation</b>"))
         layout.addSpacing(4)
 
-        self.combo_collab = QComboBox()
-        self.combo_sample = QComboBox()
-        self.combo_exp    = QComboBox()
+        self.tree_view = QTreeView()
+        self.tree_model = QStandardItemModel()
+        self.tree_model.setHorizontalHeaderLabels(["Research Hierarchy"])
+        self.tree_view.setModel(self.tree_model)
+        self.tree_view.setEditTriggers(QTreeView.EditTrigger.NoEditTriggers)
+        self.tree_view.setHeaderHidden(True)
+        self.tree_view.setIndentation(12)
+        self.tree_view.setAnimated(True)
+        self.tree_view.setExpandsOnDoubleClick(False)
+        
+        # Drag and Drop
+        self.tree_view.viewport().installEventFilter(self)
+        self.tree_view.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.tree_view.customContextMenuRequested.connect(self._show_tree_context_menu)
 
-        for cb, label_text in [(self.combo_collab, "Collaborator"),
-                               (self.combo_sample, "Sample"),
-                               (self.combo_exp,    "Experiment")]:
-            lbl = QLabel(label_text)
-            lbl.setStyleSheet("font-size: 11px; font-weight: 600; letter-spacing: 0.5px;")
-            layout.addWidget(lbl)
-            layout.addWidget(cb)
-            layout.addSpacing(4)
+        layout.addWidget(self.tree_view, stretch=1)
 
-        layout.addSpacing(12)
-
-        self.btn_new_collab = QPushButton("Add New Collaborator")
-        self.btn_new_sample = QPushButton("Add New Sample")
-        self.btn_new_exp    = QPushButton("Add New Experiment")
-
-        self.btn_new_collab.clicked.connect(lambda: self.create_new_entry("collab"))
-        self.btn_new_sample.clicked.connect(lambda: self.create_new_entry("sample"))
-        self.btn_new_exp.clicked.connect(lambda: self.create_new_entry("exp"))
-
-        for btn in (self.btn_new_collab, self.btn_new_sample, self.btn_new_exp):
-            layout.addWidget(btn)
-            layout.addSpacing(2)
-
-        layout.addStretch()
-
+        # Removed buttons for New Collaborator/Sample/Experiment
         layout.addSpacing(12)
         self.btn_report_bug = QPushButton("🐞  Report Bug / Feedback")
         self.btn_report_bug.setObjectName("btn_report_bug")
         self.btn_report_bug.clicked.connect(self._on_report_bug)
         layout.addWidget(self.btn_report_bug)
-        # ── Context menus ─────────────────────────────────────────────────────
-        self.combo_collab.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.combo_sample.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-        self.combo_exp.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
-
-        self.combo_collab.customContextMenuRequested.connect(lambda p: self._show_context_menu(p, "collab"))
-        self.combo_sample.customContextMenuRequested.connect(lambda p: self._show_context_menu(p, "sample"))
-        self.combo_exp.customContextMenuRequested.connect(lambda p: self._show_context_menu(p, "exp"))
 
         # ── Signals ───────────────────────────────────────────────────────────
         self.check_remote.stateChanged.connect(self.update_root)
         self.combo_network.currentIndexChanged.connect(self.update_root)
-        self.combo_collab.currentIndexChanged.connect(self.update_samples)
-        self.combo_sample.currentIndexChanged.connect(self.update_experiments)
-        self.combo_exp.currentIndexChanged.connect(self.experimentChanged.emit)
-
-        # Enable drag and drop functionality for the experiment selection
-        self.combo_exp.installEventFilter(self)
+        self.tree_view.selectionModel().selectionChanged.connect(self._on_tree_selection_changed)
+        self.tree_view.clicked.connect(self._on_tree_clicked)
+        self.tree_view.activated.connect(self._on_tree_clicked)
 
     def apply_theme(self, T, dark_mode: bool):
         self.dark_mode_toggle.updateThemeColors(
@@ -136,19 +171,117 @@ class SidebarWidget(QFrame):
             thumb_color=T.toggle_thumb,
             label_color=T.text_primary,
         )
+        self.tree_view.setStyleSheet(f"QTreeView {{ border: none; background: transparent; }}")
+
+    def _set_loading_state(self, is_loading: bool):
+        """Disables/Enables UI during async operations."""
+        self.btn_refresh.setEnabled(not is_loading)
+        self.tree_view.setEnabled(not is_loading)
+        if is_loading:
+            self.btn_refresh.setText("⏳  Scanning...")
+        else:
+            self.btn_refresh.setText("⟳  Refresh")
+
+    # ------------------------------------------------------------------ WORKER HANDLERS
+    def _handle_worker_result(self, task_id, data):
+        self._set_loading_state(False)
+
+        if task_id == "RESOLVE_ROOT":
+            # Update Hosts
+            if self.check_remote.isChecked():
+                self.combo_network.blockSignals(True)
+                current = self.combo_network.currentText()
+                self.combo_network.clear()
+                self.combo_network.addItems(data["hosts"])
+                if current in data["hosts"]: 
+                    self.combo_network.setCurrentText(current)
+                self.combo_network.blockSignals(False)
+            
+            self.parent_window.base_dir = data["base_dir"]
+            self._populate_tree(data["tree_data"])
+            self.toggle_buttons()
+
+    def _handle_worker_error(self, message):
+        self._set_loading_state(False)
+        QMessageBox.critical(self, "System Error", f"Background task failed:\n{message}")
+
+    def _populate_tree(self, tree_dict):
+        # 1. Capture current expanded state and selection
+        expanded_collabs = set()
+        expanded_samples = set()
+        current_path = ProjectManager.Session.get_path()
+        current_path_str = str(current_path) if current_path else None
+
+        for i in range(self.tree_model.rowCount()):
+            c_idx = self.tree_model.index(i, 0)
+            if self.tree_view.isExpanded(c_idx):
+                c_item = self.tree_model.item(i)
+                c_name = c_item.text()
+                expanded_collabs.add(c_name)
+                for j in range(c_item.rowCount()):
+                    s_idx = self.tree_model.index(j, 0, c_idx)
+                    if self.tree_view.isExpanded(s_idx):
+                        expanded_samples.add((c_name, c_item.child(j).text()))
+
+        # 2. Block selection signals during rebuild to prevent Session.clear() flickers
+        self.tree_view.selectionModel().blockSignals(True)
+
+        self.tree_model.clear()
+        self.tree_model.setHorizontalHeaderLabels(["Research Hierarchy"])
+        
+        target_idx = None
+
+        for collab, samples in sorted(tree_dict.items()):
+            c_item = QStandardItem(collab)
+            c_item.setData("collab", Qt.ItemDataRole.UserRole + 1)
+            self.tree_model.appendRow(c_item)
+            
+            if collab in expanded_collabs:
+                self.tree_view.setExpanded(c_item.index(), True)
+
+            for sample, exps in sorted(samples.items()):
+                s_item = QStandardItem(sample)
+                s_item.setData("sample", Qt.ItemDataRole.UserRole + 1)
+                c_item.appendRow(s_item)
+                
+                if (collab, sample) in expanded_samples:
+                    self.tree_view.setExpanded(s_item.index(), True)
+
+                for exp in sorted(exps):
+                    e_item = QStandardItem(exp)
+                    e_item.setData("exp", Qt.ItemDataRole.UserRole + 1)
+                    # Store absolute path for easy access
+                    path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
+                    path_str = str(path)
+                    e_item.setData(path_str, Qt.ItemDataRole.UserRole)
+                    s_item.appendRow(e_item)
+                    
+                    if path_str == current_path_str:
+                        target_idx = e_item.index()
+
+        # 3. Restore signals and selection
+        self.tree_view.selectionModel().blockSignals(False)
+        if target_idx:
+            self.tree_view.setCurrentIndex(target_idx)
+            self.tree_view.scrollTo(target_idx)
+        elif current_path_str:
+            # Selection was lost (experiment likely deleted), sync the session
+            ProjectManager.Session.clear()
+            self.experimentChanged.emit()
+            self.toggle_buttons()
+
 
     # ------------------------------------------------------------------ DRAG & DROP
     def eventFilter(self, source, event):
         """
-        Intercepts mouse events on combo_exp to handle dragging.
-        This is more reliable than overriding mouseMoveEvent on the sidebar itself,
-        as the ComboBox typically consumes its own mouse events.
+        Intercepts mouse events on the tree viewport to handle dragging.
+        Filtering the viewport ensures coordinates align with indexAt() and visualRect()
+        which are used to identify the dragged item and create the ghost image.
         """
-        if source is self.combo_exp:
+        if source is self.tree_view.viewport():
             if event.type() == event.Type.MouseButtonPress:
                 if event.button() == Qt.MouseButton.LeftButton:
                     self._drag_start_pos = event.pos()
-                    return True  # Intercept the press to prevent the dropdown from opening immediately
 
             elif event.type() == event.Type.MouseMove:
                 if not (event.buttons() & Qt.MouseButton.LeftButton) or self._drag_start_pos is None:
@@ -165,68 +298,63 @@ class SidebarWidget(QFrame):
                 return True # Consume event so the dropdown doesn't pop up during drag
 
             elif event.type() == event.Type.MouseButtonRelease:
-                if event.button() == Qt.MouseButton.LeftButton and self._drag_start_pos is not None:
-                    # If we released the button and never moved far enough to drag,
-                    # NOW we show the dropdown.
-                    self._drag_start_pos = None
-                    source.showPopup()
-                    return True
                 self._drag_start_pos = None
                 
         return super().eventFilter(source, event)
 
     def _execute_drag(self, event_pos):
         """Constructs the payload and starts the drag operation."""
-        collab = self.combo_collab.currentText()
-        sample = self.combo_sample.currentText()
-        exp    = self.combo_exp.currentText()
+        index = self.tree_view.indexAt(event_pos)
+        if not index.isValid(): return
         
-        if not (collab and sample and exp):
-            return
+        item = self.tree_model.itemFromIndex(index)
+        if item.data(Qt.ItemDataRole.UserRole + 1) != "exp":
+            return # Only drag experiment files
 
-        json_path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
+        json_path = item.data(Qt.ItemDataRole.UserRole)
         
         drag = QDrag(self)
         mime_data = QMimeData()
-        mime_data.setText(str(json_path))  # The 'payload' is the absolute path to the JSON
+        mime_data.setText(str(json_path))  # Ensure payload is a string path
         drag.setMimeData(mime_data)
         
-        # Visual Cue: Create a 'ghost' snapshot of the widget
-        pixmap = self.combo_exp.grab()
+        # Visual Cue: Create a high-quality 'ghost' snapshot of the actual rendered item
+        rect = self.tree_view.visualRect(index)
+        if rect.isEmpty(): return
+
+        # Grab the item exactly as it appears in the tree (includes icons, fonts, and colors)
+        full_pixmap = self.tree_view.viewport().grab(rect)
         
-        # Optional: Make the ghost image semi-transparent for a cleaner look
+        # Create a semi-transparent version for a professional 'floating' effect
+        pixmap = QPixmap(full_pixmap.size())
+        pixmap.fill(Qt.GlobalColor.transparent)
         painter = QPainter(pixmap)
-        painter.setCompositionMode(QPainter.CompositionMode.CompositionMode_DestinationIn)
-        painter.fillRect(pixmap.rect(), QColor(0, 0, 0, 150)) # 150/255 opacity
+        painter.setOpacity(0.7)
+        painter.drawPixmap(0, 0, full_pixmap)
         painter.end()
 
         drag.setPixmap(pixmap)
-        drag.setHotSpot(event_pos)
+        drag.setHotSpot(event_pos - rect.topLeft())
         
         self._drag_start_pos = None # Reset state
+
+        # Execute the drag; this blocks until the user releases the mouse
         drag.exec(Qt.DropAction.CopyAction)
+
+        # After release, programmatically select and load the experiment in the sidebar
+        self.tree_view.setCurrentIndex(index)
+        self._on_tree_clicked(index)
 
     # ------------------------------------------------------------------ ROOT LOGIC
     def update_root(self):
-        if self.check_remote.isChecked():
-            self.combo_network.setEnabled(True)
-            valid_hosts = NetworkService.get_available_hosts()
-
-            self.combo_network.blockSignals(True)
-            current = self.combo_network.currentText()
-            self.combo_network.clear()
-            self.combo_network.addItems(valid_hosts)
-            if current in valid_hosts: self.combo_network.setCurrentText(current)
-            self.combo_network.blockSignals(False)
-        else:
-            self.combo_network.setEnabled(False)
-
-        self.parent_window.base_dir = NetworkService.resolve_base_dir(
-            self.combo_network.currentText(), self.check_remote.isChecked()
-        )
+        self._set_loading_state(True)
+        self.combo_network.setEnabled(self.check_remote.isChecked())
         
-        self.refresh_dropdown(self.combo_collab, self.parent_window.base_dir / "SpectraLink_Data")
-        self.update_samples()
+        params = {
+            "host": self.combo_network.currentText(),
+            "is_remote": self.check_remote.isChecked()
+        }
+        self.requestTask.emit("RESOLVE_ROOT", params)
 
     def _on_report_bug(self):
         from ui.bug_report_dialog import BugReportDialog
@@ -234,224 +362,192 @@ class SidebarWidget(QFrame):
         dlg.exec()
 
     def refresh_connection(self):
-        try:
-            cur_collab = self.combo_collab.currentText()
-            cur_sample = self.combo_sample.currentText()
-            cur_exp    = self.combo_exp.currentText()
-            self.update_root()
-            if self.combo_collab.findText(cur_collab) != -1:
-                self.combo_collab.setCurrentText(cur_collab)
-                if self.combo_sample.findText(cur_sample) != -1:
-                    self.combo_sample.setCurrentText(cur_sample)
-                    if self.combo_exp.findText(cur_exp) != -1:
-                        self.combo_exp.setCurrentText(cur_exp)
-        except Exception as e:
-            QMessageBox.critical(self, "Refresh Failed", str(e))
+        """Trigger a fresh root resolution and re-scan."""
+        # We simply call update_root; the result handler handles the cascading updates.
+        self.update_root()
 
-    def refresh_dropdown(self, combo, path):
-        combo.blockSignals(True)
-        combo.clear()
-        combo.addItems(ProjectManager.list_folders(path))
-        combo.blockSignals(False)
+    def _on_tree_clicked(self, index):
+        """
+        Handles logic on mouse release (click) or activation (Enter key).
+        Separating this from selection allows drag-and-drop to start without
+        triggering heavy JSON loading immediately on press.
+        """
+        if not index.isValid(): return
+        
+        item = self.tree_model.itemFromIndex(index)
+        level = item.data(Qt.ItemDataRole.UserRole + 1)
 
-    def update_samples(self):
-        self.combo_sample.clear()
-        self.combo_exp.clear()
-        collab = self.combo_collab.currentText()
-        if collab:
-            self.refresh_dropdown(self.combo_sample, self.parent_window.base_dir / "SpectraLink_Data" / collab)
-            self.update_experiments()
-        self.toggle_buttons()
+        if level == "exp":
+            # Load the experiment only when a full click (release) occurs
+            path = Path(item.data(Qt.ItemDataRole.UserRole))
+            ProjectManager.Session.load_experiment(path)
+            self.experimentChanged.emit()
+        else:
+            # Toggle expansion for folders
+            if self.tree_view.isExpanded(index):
+                self.tree_view.collapse(index)
+            else:
+                self.tree_view.expand(index)
 
-    def update_experiments(self):
-        self.combo_exp.clear()
-        collab = self.combo_collab.currentText()
-        sample = self.combo_sample.currentText()
-        if collab and sample:
-            json_dir = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON"
-            self.combo_exp.addItems(ProjectManager.list_experiments(json_dir))
+    def _on_tree_selection_changed(self):
+        """Handles highlight changes. Heavy data loading is deferred to _on_tree_clicked."""
+        index = self.tree_view.currentIndex()
+        is_exp = False
+        
+        if index.isValid():
+            item = self.tree_model.itemFromIndex(index)
+            is_exp = (item.data(Qt.ItemDataRole.UserRole + 1) == "exp")
+        
+        if not is_exp:
+            # If we select a folder or nothing, clear the active experiment view
+            ProjectManager.Session.clear()
+            self.experimentChanged.emit()
+
         self.toggle_buttons()
 
     def toggle_buttons(self):
-        has_collab = bool(self.combo_collab.currentText())
-        has_sample = bool(self.combo_sample.currentText())
-        self.btn_new_sample.setEnabled(has_collab)
-        self.btn_new_exp.setEnabled(has_sample)
+        """Updates button enablement based on current selection."""
+        index = self.tree_view.currentIndex()
+        level = ""
+        if index.isValid():
+            level = self.tree_model.itemFromIndex(index).data(Qt.ItemDataRole.UserRole + 1)
+        
+        # Note: Creation buttons are now removed, but we keep this logic 
+        # if we add specific context-sensitive buttons later.
+        pass
 
     # ------------------------------------------------------------------ CRUD
-    def create_new_entry(self, level):
-        old_collab = self.combo_collab.currentText()
-        old_sample = self.combo_sample.currentText()
+    def create_new_entry(self, level, current_item=None):
+        """
+        Creates a new file system entry. 
+        If current_item is provided, it uses that as the parent context.
+        """
+        if current_item is None:
+            index = self.tree_view.currentIndex()
+            current_item = self.tree_model.itemFromIndex(index) if index.isValid() else None
 
         if level == "exp":
+            if not current_item: 
+                QMessageBox.warning(self, "No Context", "Please right-click a Sample to add an experiment.")
+                return
+                
             dlg = NewExperimentDialog(self.parent_window)
             if dlg.exec() != NewExperimentDialog.DialogCode.Accepted: return
             name, technique = dlg.get_values()
-            is_valid, err = validate_filename(name)
-            if not is_valid:
-                QMessageBox.warning(self, "Invalid Name", err)
-                return
-
+            
+            # Resolve path logic
+            sample_item = current_item if current_item.data(Qt.ItemDataRole.UserRole + 1) == "sample" else current_item.parent()
+            collab_item = sample_item.parent()
+            
             try:
-                target = self.parent_window.base_dir / "SpectraLink_Data" / old_collab / old_sample / "JSON" / f"{name.strip()}.json"
+                target = self.parent_window.base_dir / "SpectraLink_Data" / collab_item.text() / sample_item.text() / "JSON" / f"{name.strip()}.json"
                 if not ProjectManager.create_experiment_template(target, name.strip(), technique):
                     QMessageBox.warning(self, "Exists", "Already exists.")
                     return
-                self.refresh_ui_after_creation("exp", name.strip(), old_collab, old_sample)
+                self.update_root() # Full refresh for now
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
         else:
             name, ok = QInputDialog.getText(self, "New Entry", f"Enter {level} name:")
             if not ok or not name: return
-            is_valid, err = validate_filename(name)
-            if not is_valid:
-                QMessageBox.warning(self, "Invalid Name", err)
-                return
-            
-            # name = name.strip().replace(" ", "_")
+
             try:
                 path = self.parent_window.base_dir / "SpectraLink_Data"
                 if level == "collab": ProjectManager.create_folder(path / name)
                 else: 
-                    target = path / old_collab / name
+                    collab_name = current_item.text() if current_item.data(Qt.ItemDataRole.UserRole + 1) == "collab" else current_item.parent().text()
+                    target = path / collab_name / name
                     ProjectManager.create_folder(target)
                     ProjectManager.create_folder(target / "JSON")
-                self.refresh_ui_after_creation(level, name, old_collab, old_sample)
+                self.update_root()
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
-    def refresh_ui_after_creation(self, level, name, old_collab, old_sample):
-        self.combo_collab.blockSignals(True)
-        self.combo_sample.blockSignals(True)
-        self.combo_exp.blockSignals(True)
-        self.refresh_dropdown(self.combo_collab, self.parent_window.base_dir / "SpectraLink_Data")
-
-        if level == "collab":
-            self.combo_collab.setCurrentText(name)
-            self.update_samples()
-        elif level == "sample":
-            self.combo_collab.setCurrentText(old_collab)
-            self.refresh_dropdown(self.combo_sample, self.parent_window.base_dir / "SpectraLink_Data" / old_collab)
-            self.combo_sample.setCurrentText(name)
-            self.update_experiments()
-        elif level == "exp":
-            self.combo_collab.setCurrentText(old_collab)
-            self.combo_sample.setCurrentText(old_sample)
-            self.update_experiments()
-            self.combo_exp.setCurrentText(name)
-
-        self.combo_collab.blockSignals(False)
-        self.combo_sample.blockSignals(False)
-        self.combo_exp.blockSignals(False)
-        self.toggle_buttons()
-        self.experimentChanged.emit()
-
-    def _show_context_menu(self, pos, level):
-        combo = getattr(self, f"combo_{level}")
-        current_name = combo.currentText()
-        if not current_name: return
-
+    def _show_tree_context_menu(self, pos):
+        index = self.tree_view.indexAt(pos)
         menu = QMenu(self)
+
+        # 1. Right-click on empty space: Global actions
+        if not index.isValid():
+            add_collab_act = menu.addAction("Add New Collaborator")
+            menu.addSeparator()
+            expand_all_act = menu.addAction("Expand All")
+            collapse_all_act = menu.addAction("Collapse All")
+            
+            action = menu.exec(self.tree_view.mapToGlobal(pos))
+            if action == add_collab_act:
+                self.create_new_entry("collab")
+            elif action == expand_all_act:
+                self.tree_view.expandAll()
+            elif action == collapse_all_act:
+                self.tree_view.collapseAll()
+            return
+
+        # 2. Right-click on a specific item: Context-aware actions
+        item = self.tree_model.itemFromIndex(index)
+        level = item.data(Qt.ItemDataRole.UserRole + 1)
+        current_name = item.text()
+
+        add_act = None
+        if level == "collab":
+            add_act = menu.addAction("Add New Sample...")
+        elif level == "sample":
+            add_act = menu.addAction("Add New Experiment...")
+
         rename_act = menu.addAction(f"Rename '{current_name}'")
         delete_act = menu.addAction(f"Delete '{current_name}'") if level == "exp" else None
         
-        action = menu.exec(combo.mapToGlobal(pos))
+        menu.addSeparator()
+        expand_all_act = menu.addAction("Expand All")
+        collapse_all_act = menu.addAction("Collapse All")
+
+        action = menu.exec(self.tree_view.mapToGlobal(pos))
         if not action: return
 
-        if action == rename_act:
-            if level == "collab": self._rename_collab(current_name)
-            elif level == "sample": self._rename_sample(current_name)
-            else: self._rename_experiment(current_name)
+        if action == add_act:
+            self.create_new_entry("sample" if level == "collab" else "exp", item)
+        elif action == rename_act:
+            self._rename_item(item, level)
         elif action == delete_act:
-            self._delete_experiment(current_name)
+            self._delete_experiment(item)
+        elif action == expand_all_act:
+            self.tree_view.expandAll()
+        elif action == collapse_all_act:
+            self.tree_view.collapseAll()
 
-    def _rename_collab(self, current_name):
-        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for '{current_name}':")
+    def _rename_item(self, item, level):
+        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for '{item.text()}':")
         if not ok or not new_name: return
+        
         try:
-            ProjectManager.rename_path(self.parent_window.base_dir / "SpectraLink_Data" / current_name, new_name)
+            old_path = None
+            if level == "collab":
+                old_path = self.parent_window.base_dir / "SpectraLink_Data" / item.text()
+            elif level == "sample":
+                old_path = self.parent_window.base_dir / "SpectraLink_Data" / item.parent().text() / item.text()
+            elif level == "exp":
+                old_path = Path(item.data(Qt.ItemDataRole.UserRole))
+            
+            ProjectManager.rename_path(old_path, new_name if level != "exp" else f"{new_name}.json")
             self.update_root()
-            self.combo_collab.setCurrentText(new_name.strip())
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
-    def _rename_sample(self, current_name):
-        collab = self.combo_collab.currentText()
-        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for '{current_name}':")
-        if not ok or not new_name: return
-        try:
-            ProjectManager.rename_path(self.parent_window.base_dir / "SpectraLink_Data" / collab / current_name, new_name)
-            self.update_samples()
-            self.combo_sample.setCurrentText(new_name.strip())
-        except Exception as e: QMessageBox.critical(self, "Error", str(e))
-
-    def _rename_experiment(self, current_name):
-        collab = self.combo_collab.currentText()
-        sample = self.combo_sample.currentText()
-        new_name, ok = QInputDialog.getText(self, "Rename", f"New name for '{current_name}':")
-        if not ok or not new_name: return
-        try:
-            ProjectManager.rename_path(self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{current_name}.json", f"{new_name.strip()}.json")
-            self.update_experiments()
-            self.combo_exp.setCurrentText(new_name.strip())
-        except Exception as e: QMessageBox.critical(self, "Error", str(e))
-
-    def _delete_experiment(self, exp_name):
-        collab = self.combo_collab.currentText()
-        sample = self.combo_sample.currentText()
-        reply = QMessageBox.question(self, "Delete", f"Delete '{exp_name}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+    def _delete_experiment(self, item):
+        reply = QMessageBox.question(self, "Delete", f"Delete '{item.text()}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
         if reply != QMessageBox.StandardButton.Yes: return
         try:
-            ProjectManager.delete_file(self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp_name}.json")
-            self.update_experiments()
-            self.experimentChanged.emit()
+            ProjectManager.delete_file(Path(item.data(Qt.ItemDataRole.UserRole)))
+            self.update_root()
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def select_path(self, json_path: Path):
-        """
-        Programmatically sets the sidebar dropdowns to select a specific experiment.
-        This will trigger the experimentChanged signal, updating Discovery and Analysis tabs.
-        """
-        try:
-            # Extract parts from the JSON path
-            # Example: Data/SpectraLink_Data/Collaborator/Sample/JSON/Experiment.json
-            exp_name = json_path.stem
-            # The parent of the JSON file is 'JSON', its parent is 'Sample', its parent is 'Collaborator'
-            sample_name = json_path.parent.parent.name
-            collab_name = json_path.parent.parent.parent.name
-
-            # Block signals to prevent multiple updates during programmatic selection
-            self.combo_collab.blockSignals(True)
-            self.combo_sample.blockSignals(True)
-            self.combo_exp.blockSignals(True)
-
-            # Set Collaborator
-            idx_collab = self.combo_collab.findText(collab_name)
-            if idx_collab != -1:
-                self.combo_collab.setCurrentIndex(idx_collab)
-            else:
-                print(f"Warning: Collaborator '{collab_name}' not found in sidebar.")
-                return
-
-            # Update samples and set Sample
-            self.update_samples() # This populates combo_sample based on combo_collab
-            idx_sample = self.combo_sample.findText(sample_name)
-            if idx_sample != -1:
-                self.combo_sample.setCurrentIndex(idx_sample)
-            else:
-                print(f"Warning: Sample '{sample_name}' not found for '{collab_name}'.")
-                return
-
-            # Update experiments and set Experiment
-            self.update_experiments() # This populates combo_exp based on combo_sample
-            idx_exp = self.combo_exp.findText(exp_name)
-            if idx_exp != -1:
-                self.combo_exp.setCurrentIndex(idx_exp)
-            else:
-                print(f"Warning: Experiment '{exp_name}' not found for '{sample_name}'.")
-                return
-
-        finally:
-            # Always unblock signals, even if an error occurred
-            self.combo_collab.blockSignals(False)
-            self.combo_sample.blockSignals(False)
-            self.combo_exp.blockSignals(False)
-            # Emit the signal once after all changes are made
-            self.experimentChanged.emit()
+        """Programmatically find and select the experiment in the tree."""
+        path_str = str(json_path)
+        for row in range(self.tree_model.rowCount()):
+            c_item = self.tree_model.item(row)
+            for s_row in range(c_item.rowCount()):
+                s_item = c_item.child(s_row)
+                for e_row in range(s_item.rowCount()):
+                    e_item = s_item.child(e_row)
+                    if e_item.data(Qt.ItemDataRole.UserRole) == path_str:
+                        self.tree_view.setCurrentIndex(e_item.index())
+                        self.tree_view.scrollTo(e_item.index())
+                        return
