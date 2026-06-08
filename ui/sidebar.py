@@ -70,7 +70,8 @@ class SidebarWidget(QFrame):
         super().__init__()
         self.parent_window = parent_window
         self.setObjectName("sidebar")
-        self.setFixedWidth(220)
+        self.setMinimumWidth(180)
+        self.setMaximumWidth(500)
         self._drag_start_pos = None
         
         # Initialize Background Threading

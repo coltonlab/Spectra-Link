@@ -133,7 +133,7 @@ TECHNIQUE_CONFIG = {
         "local_param": {
             "key": "temperature", "label": "Temperature (K)",
             "min": 0, "max": 9999, "default": 295, "step": 1, "decimals": 0,
-            "active_scan_types": ["Voltage"],
+            "active_scan_types": ["Voltage", "Transmission"],
         },
         "analysis_options": [
             "smooth_data",

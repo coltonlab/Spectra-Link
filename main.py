@@ -1,7 +1,7 @@
 import sys
 import os
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtGui import QIcon
 
@@ -54,8 +54,10 @@ class SpectraLink(QMainWindow):
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
 
+        # Use a Splitter to allow resizing the sidebar
+        self.splitter = QSplitter(Qt.Orientation.Horizontal)
+
         self.sidebar = SidebarWidget(self)
-        main_layout.addWidget(self.sidebar)
 
         # ── Tabs ──────────────────────────────────────────────────────────────
         content = QWidget()
@@ -72,7 +74,14 @@ class SpectraLink(QMainWindow):
         self.comparison_tab = ComparisonTab(self)
         self.tabs.addTab(self.comparison_tab, "Comparison Basket")
         content_layout.addWidget(self.tabs)
-        main_layout.addWidget(content, 1)
+
+        # Add components to splitter
+        self.splitter.addWidget(self.sidebar)
+        self.splitter.addWidget(content)
+        self.splitter.setStretchFactor(1, 1) # Ensure content area expands
+        self.splitter.setSizes([220, 880])    # Set initial default width
+
+        main_layout.addWidget(self.splitter)
 
         # ── Signals ───────────────────────────────────────────────────────────
         self.sidebar.experimentChanged.connect(self._on_exp_changed)
