@@ -213,6 +213,8 @@ class SidebarWidget(QFrame):
         current_path = ProjectManager.Session.get_path()
         current_path_str = str(current_path) if current_path else None
 
+        self.tree_view.setUpdatesEnabled(False)
+
         for i in range(self.tree_model.rowCount()):
             c_idx = self.tree_model.index(i, 0)
             if self.tree_view.isExpanded(c_idx):
@@ -263,13 +265,20 @@ class SidebarWidget(QFrame):
         # 3. Restore signals and selection
         self.tree_view.selectionModel().blockSignals(False)
         if target_idx:
+            # Restore selection and ensure experiment data is reloaded to reflect disk state
             self.tree_view.setCurrentIndex(target_idx)
             self.tree_view.scrollTo(target_idx)
+            path_str = self.tree_model.itemFromIndex(target_idx).data(Qt.ItemDataRole.UserRole)
+            if path_str:
+                ProjectManager.Session.load_experiment(Path(path_str))
+                self.experimentChanged.emit()
         elif current_path_str:
             # Selection was lost (experiment likely deleted), sync the session
             ProjectManager.Session.clear()
             self.experimentChanged.emit()
             self.toggle_buttons()
+
+        self.tree_view.setUpdatesEnabled(True)
 
 
     # ------------------------------------------------------------------ DRAG & DROP
@@ -551,4 +560,5 @@ class SidebarWidget(QFrame):
                     if e_item.data(Qt.ItemDataRole.UserRole) == path_str:
                         self.tree_view.setCurrentIndex(e_item.index())
                         self.tree_view.scrollTo(e_item.index())
+                        self._on_tree_clicked(e_item.index())
                         return
