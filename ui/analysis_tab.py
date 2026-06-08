@@ -62,6 +62,10 @@ class AnalysisTab(QWidget):
         self.btn_save = QPushButton("Save for Publication")
         self.btn_save.setStyleSheet("padding: 5px 12px;")
         self.btn_save.clicked.connect(self.save_publication_plot)
+
+        self.btn_export = QPushButton("📤  Export Data")
+        self.btn_export.setStyleSheet("padding: 5px 12px;")
+        self.btn_export.clicked.connect(self.export_processed_data)
         
         # Get the panel's palette for consistent accent color
         is_dark = getattr(self.parent_window, "dark_mode", True)
@@ -89,6 +93,7 @@ class AnalysisTab(QWidget):
 
         ctrl_layout.addWidget(self.btn_run)
         ctrl_layout.addWidget(self.btn_save)
+        ctrl_layout.addWidget(self.btn_export)
         ctrl_layout.addSpacing(8)
         ctrl_layout.addWidget(self.btn_settings)
         ctrl_layout.addSpacing(12)
@@ -272,3 +277,44 @@ class AnalysisTab(QWidget):
         if self._current_processor:
             self._current_processor.save_fixed_plot(self.figure, file_path)
             self.status_label.setText(f"Exported: {Path(file_path).name}")
+
+    def export_processed_data(self):
+        """Exports the processed numerical data to a CSV file."""
+        if not self._current_processor:
+            self.status_label.setText("Error: No data to export")
+            return
+
+        # Determine the default location and filename
+        initial_dir = Path(self.parent_window.base_dir)
+        default_name = "data_export.csv"
+        
+        discovery = getattr(self.parent_window, "discovery_tab", None)
+        if discovery and discovery._current_json_path:
+            initial_dir = discovery._current_json_path.parent.parent
+            full_tech = discovery._current_technique or "Technique"
+            
+            tech_map = {
+                "Absorption": "ABS",
+                "EA Voltage Series": "EA",
+                "Circular Dichroism (CD)": "CD"
+            }
+            tech_name = tech_map.get(full_tech, "DATA")
+            sample_name = initial_dir.name
+            exp_name = discovery._current_json_path.stem
+            default_name = f"{tech_name}_Export_{sample_name}_{exp_name}.csv"
+
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export Processed Data",
+            str(initial_dir / default_name),
+            "CSV Files (*.csv);;Text Files (*.txt)"
+        )
+
+        if not file_path:
+            return
+
+        success = self._current_processor.export_data(file_path)
+        if success:
+            self.status_label.setText(f"Data exported to {Path(file_path).name}")
+        else:
+            self.status_label.setText("Export failed")

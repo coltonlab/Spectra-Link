@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from pathlib import Path
@@ -181,6 +182,38 @@ class ABSProcessor(BaseProcessor):
 
         except Exception as e:
             print(f"ABSProcessor.generate_plot error: {e}")
+            return False
+
+    def export_data(self, save_path: str, path=None) -> bool:
+        """Exports the processed data to a CSV file using pandas."""
+        try:
+            json_data = self.get_json_data(path)
+            settings = self.get_settings(json_data)
+            json_path = path or self.data_path
+            
+            traces = self._load_traces(json_data, json_path)
+            if not traces:
+                return False
+
+            export_dict = {}
+            for i, trace in enumerate(traces):
+                x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, i)
+                
+                x_label = "Energy (eV)" if settings.get("convert_to_ev") else "Wavelength (nm)"
+                y_label = f"Absorption (OD)"
+                if settings.get("normalize_to_peak"):
+                    y_label = f"Normalized Absorption (a.u.)"
+
+                # Add columns to dictionary
+                if x_label not in export_dict:
+                    export_dict[x_label] = x
+                export_dict[y_label] = y
+
+            df = pd.DataFrame(export_dict)
+            df.to_csv(save_path, index=False)
+            return True
+        except Exception as e:
+            print(f"ABSProcessor.export_data error: {e}")
             return False
 
 # if __name__ == "__main__":

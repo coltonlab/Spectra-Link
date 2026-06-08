@@ -1,4 +1,5 @@
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from pathlib import Path
@@ -221,4 +222,39 @@ class EAProcessor(BaseProcessor):
 
         except Exception as e:
             print(f"EAProcessor.generate_plot error: {e}")
+            return False
+
+    def export_data(self, save_path: str, path=None) -> bool:
+        """Exports the processed numerical data to a CSV file."""
+        try:
+            json_data = self.get_json_data(path)
+            settings = self.get_settings(json_data)
+            
+            traces = self._load_traces(json_data)
+            if not traces:
+                return False
+
+            export_dict = {}
+            use_ev = settings.get("convert_to_ev", False)
+            x_label = "Energy (eV)" if use_ev else "Wavelength (nm)"
+            
+            # Prefix for Y columns based on normalization
+            y_prefix = "Normalized EA (a.u.)" if settings.get("normalize_to_peak") else "Electroabsorption (mOD)"
+
+            for i, trace in enumerate(traces):
+                x, y = self._process_trace(trace["wavelengths"], trace["ea"], settings, i)
+                
+                # Only add the X column once
+                if x_label not in export_dict:
+                    export_dict[x_label] = x
+                
+                # Create a unique column name for this trace (e.g., "Electroabsorption (mOD) - 100V")
+                col_name = f"{y_prefix} - {trace['label']}"
+                export_dict[col_name] = y
+
+            df = pd.DataFrame(export_dict)
+            df.to_csv(save_path, index=False)
+            return True
+        except Exception as e:
+            print(f"EAProcessor.export_data error: {e}")
             return False
