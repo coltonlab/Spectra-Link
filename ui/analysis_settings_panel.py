@@ -1,7 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFrame, QCheckBox, QComboBox, QScrollArea,
-    QSizePolicy, QGraphicsDropShadowEffect, QLineEdit, QDoubleSpinBox
+    QSizePolicy, QGraphicsDropShadowEffect, QLineEdit, QDoubleSpinBox, QSlider
 )
 from PyQt6.QtCore import Qt, pyqtSignal, QPropertyAnimation, QEasingCurve, QRect, QSize, QTimer
 from PyQt6.QtGui import QColor, QFont, QPalette, QIcon
@@ -165,6 +165,23 @@ def _global_stylesheet(C: dict) -> str:
             font-size: 11px;
             min-width: 80px;
         }}
+
+        /* ── Slider ── */
+        QSlider::groove:horizontal {{
+            border: 1px solid {C['border']};
+            height: 4px;
+            background: {C['bg_combo']};
+            margin: 2px 0;
+            border-radius: 2px;
+        }}
+        QSlider::handle:horizontal {{
+            background: {C['accent']};
+            border: 1px solid {C['accent']};
+            width: 14px;
+            height: 14px;
+            margin: -5px 0;
+            border-radius: 7px;
+        }}
     """
 
 
@@ -314,6 +331,55 @@ class _SpinRow(QWidget):
 
         layout.addWidget(lbl)
         layout.addWidget(self.spin)
+
+class _SliderSpinRow(QWidget):
+    """A labeled slider + numeric input row."""
+    valueChanged = pyqtSignal(float)
+
+    def __init__(self, label_text: str, C: dict, min_v=0.0, max_v=10.0, step=0.01, decimals=2, parent=None):
+        super().__init__(parent)
+        layout = QHBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)
+        layout.setSpacing(10)
+
+        lbl = QLabel(label_text)
+        lbl.setStyleSheet(f"color: {C['text_label']}; font-size: 11px;")
+        lbl.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Preferred)
+        lbl.setFixedWidth(100)
+
+        self.slider = QSlider(Qt.Orientation.Horizontal)
+        self.res = 100 # Resolution for float->int conversion
+        self.slider.setRange(int(min_v * self.res), int(max_v * self.res))
+
+        self.spin = QDoubleSpinBox()
+        self.spin.setRange(min_v, max_v)
+        self.spin.setSingleStep(step)
+        self.spin.setDecimals(decimals)
+        self.spin.setFixedWidth(70)
+
+        # Syncing
+        self.spin.valueChanged.connect(self._sync_slider)
+        self.slider.valueChanged.connect(self._sync_spin)
+
+        layout.addWidget(lbl)
+        layout.addWidget(self.slider)
+        layout.addWidget(self.spin)
+
+    def _sync_slider(self, val):
+        self.slider.blockSignals(True)
+        self.slider.setValue(int(val * self.res))
+        self.slider.blockSignals(False)
+        self.valueChanged.emit(val)
+
+    def _sync_spin(self, val):
+        float_val = val / self.res
+        self.spin.blockSignals(True)
+        self.spin.setValue(float_val)
+        self.spin.blockSignals(False)
+        self.valueChanged.emit(float_val)
+
+    def setValue(self, val):
+        self.spin.setValue(val)
 
 class _VerticalLinesWidget(QWidget):
     """Dynamic list of X-value spinboxes and Label edits."""
@@ -593,11 +659,43 @@ class AnalysisSettingsPanel(QWidget):
                 elif w_type == "numeric":
                     row = _SpinRow(label_text, C, 
                                    min_v=meta.get("min", 0.1), 
-                                   max_v=meta.get("max", 20.0),
+                                   max_v=meta.get("max", 10000.0),
                                    step=meta.get("step", 0.1),
                                    decimals=meta.get("decimals", 1))
-                    row.spin.setValue(float(saved_settings.get(key, meta.get("default", 1.5))))
-                    row.spin.valueChanged.connect(
+                    
+                    val = float(saved_settings.get(key, meta.get("default", 1.5)))
+                    row.spin.setValue(val)
+
+                    def on_num_val_changed(v, k=key):
+                        # While typing, if it's even, don't emit yet. 
+                        # This prevents the plot from crashing on even windows 
+                        # and allows the user to finish typing (e.g., typing '6' then '5').
+                        if k == "smooth_window" and int(v) % 2 == 0:
+                            return
+                        self.settingChanged.emit(k, v)
+
+                    def on_num_editing_finished(k=key, spin_row=row):
+                        v = spin_row.spin.value()
+                        # Final check when user hits Enter or leaves the box: 
+                        # if they stopped on an even number, force it to the next odd value.
+                        if k == "smooth_window" and int(v) % 2 == 0:
+                            v = float(int(v) + 1)
+                            spin_row.spin.blockSignals(True)
+                            spin_row.spin.setValue(v)
+                            spin_row.spin.blockSignals(False)
+                        self.settingChanged.emit(k, v)
+
+                    row.spin.valueChanged.connect(on_num_val_changed)
+                    row.spin.editingFinished.connect(on_num_editing_finished)
+                    section.content_layout.addWidget(row)
+                elif w_type == "slider_numeric":
+                    row = _SliderSpinRow(label_text, C, 
+                                       min_v=meta.get("min", 0.0), 
+                                       max_v=meta.get("max", 10.0),
+                                       step=meta.get("step", 0.01),
+                                       decimals=meta.get("decimals", 2))
+                    row.setValue(float(saved_settings.get(key, meta.get("default", 1.0))))
+                    row.valueChanged.connect(
                         lambda val, k=key: self.settingChanged.emit(k, val)
                     )
                     section.content_layout.addWidget(row)

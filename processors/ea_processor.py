@@ -82,11 +82,24 @@ class EAProcessor(BaseProcessor):
         x = wl.copy()
         y = ea.copy()
 
+        # 0. Wavelength Cutoff (nm)
+        w_min = settings.get("min_wavelength", 0.0)
+        w_max = settings.get("max_wavelength", 10000.0)
+        mask = (x >= w_min) & (x <= w_max)
+        x, y = x[mask], y[mask]
+
+        if len(x) == 0:
+            return x, y
+
         # 1. Smooth
         if settings.get("smooth_data"):
-            win = self.SMOOTH_WINDOW
+            win = int(settings.get("smooth_window", self.SMOOTH_WINDOW))
+            poly = int(settings.get("smooth_poly", self.SMOOTH_POLY))
+            if poly >= win:
+                poly = win - 1
+
             if len(y) > win:
-                y = savgol_filter(y, window_length=win, polyorder=self.SMOOTH_POLY)
+                y = savgol_filter(y, window_length=win, polyorder=poly)
 
         # 3. Flip Sign (Phase correction)
         if settings.get("flip_sign"):
@@ -97,6 +110,10 @@ class EAProcessor(BaseProcessor):
             peak = np.max(np.abs(y))
             if peak > 0:
                 y = y / peak
+
+        # 4.5 Scaling Factor
+        scaling = settings.get("scaling_factor", 1.0)
+        y = y * scaling
 
         # 5. Vertical offset between traces
         if settings.get("offset_traces"):

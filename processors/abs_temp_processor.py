@@ -47,12 +47,32 @@ class ABSTempProcessor(BaseProcessor):
 
     def _process_trace(self, wl, ab, settings, trace_idx):
         x, y = wl.copy(), ab.copy()
+
+        # 0. Wavelength Cutoff (nm)
+        w_min = settings.get("min_wavelength", 0.0)
+        w_max = settings.get("max_wavelength", 10000.0)
+        mask = (x >= w_min) & (x <= w_max)
+        x, y = x[mask], y[mask]
+
+        if len(x) == 0:
+            return x, y
+
         if settings.get("smooth_data"):
-            if len(y) > self.SMOOTH_WINDOW:
-                y = savgol_filter(y, self.SMOOTH_WINDOW, self.SMOOTH_POLY)
+            win = int(settings.get("smooth_window", self.SMOOTH_WINDOW))
+            poly = int(settings.get("smooth_poly", self.SMOOTH_POLY))
+            if poly >= win:
+                poly = win - 1
+            if len(y) > win:
+                y = savgol_filter(y, win, poly)
+
         if settings.get("normalize_to_peak"):
             peak = np.max(np.abs(y))
             if peak > 0: y /= peak
+
+        # 3.5 Scaling Factor
+        scaling = settings.get("scaling_factor", 1.0)
+        y = y * scaling
+
         if settings.get("offset_traces"):
             y += trace_idx * self.OFFSET_STEP
         if settings.get("convert_to_ev"):
