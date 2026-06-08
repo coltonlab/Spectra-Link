@@ -549,9 +549,18 @@ class DiscoveryTab(QWidget):
         key_map     = cfg.get("json_key_map", {})
         local_param = cfg.get("local_param")
 
+        # Determine if this scan type should be unique (a singleton).
+        # 1. It must be in the key_map (i.e., mapped to a specific JSON key like 'blank_file').
+        # 2. It must NOT be a scan type that accepts a local parameter (like in a series scan).
+        is_active_local = False
+        if local_param:
+            is_active_local = text in local_param.get("active_scan_types", [])
+
+        is_singleton = (text in key_map and key_map[text] != "none_files" and not is_active_local)
+
         # Unique scan types (those in json_key_map, excluding none_files) can only
         # appear once — demote any previous row with the same type to "None"
-        if text in key_map and key_map[text] != "none_files":
+        if is_singleton:
             for r in range(self.table.rowCount()):
                 if r != row:
                     combo = self.table.cellWidget(r, 1)

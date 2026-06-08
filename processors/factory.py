@@ -9,6 +9,7 @@ def get_processor(tech: str, parent_window):
         "ea voltage series": ("processors.ea_processor", "EAProcessor"),
         "absorption": ("processors.abs_processor", "ABSProcessor"),
         "abs temp series": ("processors.abs_temp_processor", "ABSTempProcessor"),
+        "ea temp series": ("processors.ea_temp_processor", "EATempProcessor"),
     }
 
     for key, (module_path, class_name) in mapping.items():
