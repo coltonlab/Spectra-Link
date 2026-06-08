@@ -4,3 +4,4 @@ _pycache_/
 build/
 dist/
 *.zip
+.DS_Store
