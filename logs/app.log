@@ -11,3 +11,18 @@
 2026-06-09 13:05:04,895 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
 2026-06-09 13:07:14,766 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
 2026-06-09 13:09:31,921 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:30:43,826 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:43:05,944 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:43:20,867 - SpectraLink - ERROR - ABSProcessor.generate_plot error for path: None
+Traceback (most recent call last):
+  File "c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\processors\abs_processor.py", line 160, in generate_plot
+    traces = self._load_traces(json_data, json_path)
+  File "c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\processors\abs_processor.py", line 39, in _load_traces
+    wl_b, int_b = self.load_raw_data(data_files.get("blank_file"), priority=abs_priority)
+                  ~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+TypeError: BaseProcessor.load_raw_data() got an unexpected keyword argument 'priority'
+2026-06-09 13:45:09,098 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:49:44,208 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:51:03,571 - SpectraLink - INFO - Theme toggled: Light mode
+2026-06-09 13:58:17,155 - SpectraLink - INFO - Logging initialized. Log file: c:\Users\carterms\OneDrive - Brigham Young University\Documents\Research\Spectra-Link\logs\app.log
+2026-06-09 13:58:35,220 - SpectraLink - INFO - Theme toggled: Light mode

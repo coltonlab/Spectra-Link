@@ -17,9 +17,12 @@ class ABSTempProcessor(BaseProcessor):
     def _load_traces(self, json_data):
         data_files = json_data.get("data_files", {})
         traces = []
+        
+        # For Absorption, we prioritize the magnitude R (V) to ensure positive intensity
+        abs_priority = ["R (V)", "X (V) Phased", "X (V) Phased Average", "Phased (V)", "X (V)"]
 
         # 1. Load Blank
-        wl_b, int_b = self.load_raw_data(data_files.get("blank_file"))
+        wl_b, int_b = self.load_raw_data(data_files.get("blank_file"), priority=abs_priority)
         if wl_b is None:
             logger.warning(f"ABSTempProcessor: Blank file not loaded or found for {json_data.get('core',{}).get('experiment_name')}. Cannot calculate absorbance.")
             return []
@@ -35,12 +38,14 @@ class ABSTempProcessor(BaseProcessor):
             temp = entry.get("temperature", 0)
             label = f"{temp} K" if temp else "Sample"
             
-            wl_s, int_s = self.load_raw_data(rel_path)
+            wl_s, int_s = self.load_raw_data(rel_path, priority=abs_priority)
             if wl_s is None: continue # Skip this scan if data couldn't be loaded
             if wl_s is not None:
                 # Interpolate blank onto sample wavelengths
                 int_b_interp = np.interp(wl_s, wl_b, int_b)
-                abs_vals = -np.log10(np.where(int_s/int_b_interp > 0, int_s/int_b_interp, 1e-9))
+                # Ensure intensities are positive for log calculation
+                int_s_pos, int_b_pos = np.abs(int_s), np.abs(int_b_interp)
+                abs_vals = -np.log10(np.where(int_s_pos/int_b_pos > 0, int_s_pos/int_b_pos, 1e-9))
                 
                 traces.append({
                     "wavelengths": wl_s,

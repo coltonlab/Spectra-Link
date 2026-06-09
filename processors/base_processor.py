@@ -57,7 +57,7 @@ class BaseProcessor:
         data = json_data if json_data is not None else self.get_json_data()
         return data.get("analysis_settings", {})
 
-    def load_raw_data(self, rel_path):
+    def load_raw_data(self, rel_path, priority=None):
         """Standardized data loader for all children."""
         # Handle input types (dict from JSON or Path objects)
         if isinstance(rel_path, dict):
@@ -83,9 +83,9 @@ class BaseProcessor:
             # More flexible wavelength detection
             wl_key = next((k for k in data_dict.keys() if any(x in k for x in ["Spectr", "Wavelength", "Energy", "nm", "eV"])), None)
             
-            # Priority list: We want signed data (Phased X) over unsigned magnitude (R)
-            priority = ["X (V) Phased", "X (V) Phased Average", "Phased (V)", "R (V)", "X (V)"]
-            int_key = next((p for p in priority if p in data_dict), None)
+            # Default priority list: We want signed data (Phased X) over unsigned magnitude (R)
+            search_priority = priority or ["X (V) Phased", "X (V) Phased Average", "Phased (V)", "R (V)", "X (V)"]
+            int_key = next((p for p in search_priority if p in data_dict), None)
 
             if wl_key and int_key:
                 return data_dict[wl_key], data_dict[int_key]

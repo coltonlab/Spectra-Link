@@ -28,6 +28,7 @@ class DiscoveryTab(QWidget):
         self._autosave_pending  = False
         self._last_file_dir     = None 
         self._param_widgets: dict = {} 
+        self._raw_data_windows = []  # Track open windows to prevent garbage collection
 
         self._autosave_timer = QTimer()
         self._autosave_timer.setSingleShot(True)
@@ -100,6 +101,10 @@ class DiscoveryTab(QWidget):
             if combo:
                 # Update the row background
                 self._update_row_color(row, combo.currentText())
+        
+        # 7. Update all open Raw Data inspection windows
+        for dlg in self._raw_data_windows:
+            dlg.apply_theme(is_dark)
 
     def _get_widget_style(self, widget, is_dark):
         T = get_theme(is_dark)
@@ -177,6 +182,8 @@ class DiscoveryTab(QWidget):
         self.table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
         self.table.verticalHeader().setVisible(False)
+        self.table.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.table.customContextMenuRequested.connect(self._show_table_context_menu)
         self.table.itemChanged.connect(self._schedule_autosave)
         root.addWidget(self.table, stretch=1)
 
@@ -585,6 +592,38 @@ class DiscoveryTab(QWidget):
                     spin.setStyleSheet(self._disabled_spin_style())
 
         self._schedule_autosave()
+
+    def _show_table_context_menu(self, pos):
+        """Displays a context menu for the data table."""
+        item = self.table.itemAt(pos)
+        if not item:
+            return
+
+        row = item.row()
+        path_col = self.table.columnCount() - 1
+        path_item = self.table.item(row, path_col)
+        if not path_item or not path_item.text():
+            return
+
+        file_path = path_item.text()
+        if not Path(file_path).exists():
+            return
+
+        menu = QMenu(self)
+        plot_act = menu.addAction("📈  Plot Raw Data")
+        
+        action = menu.exec(self.table.viewport().mapToGlobal(pos))
+        if action == plot_act:
+            from ui.raw_data_plot_dialog import RawDataPlotDialog
+            dlg = RawDataPlotDialog(file_path, self.parent_window.dark_mode, self)
+
+            # Store reference to allow multiple modeless windows to persist
+            self._raw_data_windows.append(dlg)
+            dlg.finished.connect(lambda: self._raw_data_windows.remove(dlg) if dlg in self._raw_data_windows else None)
+            
+            dlg.show()
+            dlg.raise_()
+            dlg.activateWindow()
 
     def _update_row_color(self, row, scan_type):
         is_dark = self.parent_window.dark_mode

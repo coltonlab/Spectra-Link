@@ -29,18 +29,21 @@ class ABSProcessor(BaseProcessor):
         # Structure: .../SpectraLink_Data/Collaborator/SampleName/JSON/Experiment.json
         target_path = json_path or self.data_path
         label = Path(target_path).parent.parent.name if target_path else "Sample"
+        
+        # For Absorption, we prioritize the magnitude R (V) to ensure positive intensity
+        abs_priority = ["R (V)", "X (V) Phased", "X (V) Phased Average", "Phased (V)", "X (V)"]
 
         traces = []
 
         # 1. Load Blank/Baseline
-        wl_b, int_b = self.load_raw_data(data_files.get("blank_file"))
+        wl_b, int_b = self.load_raw_data(data_files.get("blank_file"), priority=abs_priority)
 
         # 2. Identify Sample Trace
         samples = [(data_files.get("sample_file"), label)]
 
         # 3. Process each sample into Absorbance
         for rel_path, label in samples:
-            wl_s, int_s = self.load_raw_data(rel_path)
+            wl_s, int_s = self.load_raw_data(rel_path, priority=abs_priority)
             if wl_s is not None:
                 abs_vals = self._calculate_absorbance(wl_s, int_s, wl_b, int_b)
                 traces.append({
@@ -62,6 +65,9 @@ class ABSProcessor(BaseProcessor):
         # If no blank, assume baseline is 1.0 (no correction)
         i0 = np.interp(wl_s, wl_b, int_b) if (wl_b is not None) else np.ones_like(int_s)
         
+        # Ensure intensities are positive for the log calculation (handles negative Phased X)
+        int_s, i0 = np.abs(int_s), np.abs(i0)
+
         with np.errstate(divide='ignore', invalid='ignore'):
             ratio = int_s / i0
             abs_vals = -np.log10(np.where(ratio > 0, ratio, 1e-9))
