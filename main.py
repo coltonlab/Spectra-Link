@@ -1,9 +1,9 @@
 import sys
 import os
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter, QSplashScreen
 from PyQt6.QtCore import Qt, pyqtSignal
-from PyQt6.QtGui import QIcon
+from PyQt6.QtGui import QIcon, QPixmap
 
 from ui.theme import get_theme, apply_palette_to_app
 
@@ -139,6 +139,22 @@ class SpectraLink(QMainWindow):
 if __name__ == "__main__":
     app = QApplication(sys.argv)
     setup_logging()
+
+    # ── Splash Screen ─────────────────────────────────────────────────────────
+    # Load the splash screen image from the bundled Images folder
+    splash_path = resource_path(os.path.join('Images', 'SpectraLink Splash Screen.png'))
+    splash = None
+    if os.path.exists(splash_path):
+        pixmap = QPixmap(splash_path)
+        splash = QSplashScreen(pixmap)
+        splash.show()
+        # Process events to ensure the splash screen is painted immediately
+        app.processEvents()
+
     window = SpectraLink()
+
+    if splash:
+        splash.finish(window) # Close splash once main window is ready
+
     window.show()
     sys.exit(app.exec())
