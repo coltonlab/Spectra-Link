@@ -12,6 +12,7 @@ from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
 from ui.comparison_tab import ComparisonTab
 from ui.stylesheets import build_stylesheet
+from utils.app_logger import setup_logging, logger
 from ui.sidebar import SidebarWidget
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -22,6 +23,14 @@ def resource_path(relative_path):
     except Exception:
         base_path = os.path.abspath(".")
     return os.path.join(base_path, relative_path)
+
+def get_base_data_dir():
+    """ Get absolute path to Data directory, works for dev and PyInstaller """
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.dirname(os.path.abspath(__file__))
+    return Path(base_path) / "Data"
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Main window
@@ -35,7 +44,7 @@ class SpectraLink(QMainWindow):
         super().__init__()
         self.setWindowTitle("SPECTRA-LINK | Research Data Management")
         self.resize(1100, 720)
-        self.base_dir = Path("Data")
+        self.base_dir = get_base_data_dir()
         self.dark_mode = True
         self.init_ui()
 
@@ -92,17 +101,18 @@ class SpectraLink(QMainWindow):
     def _on_exp_changed(self):
         self.discovery_tab.refresh_target_label()
         tech = getattr(self.discovery_tab, '_current_technique', None)
-        if tech:
-            self.analysis_tab.rebuild_settings_header(tech)
+        
+        # Always notify AnalysisTab to rebuild or clear stale states
+        self.analysis_tab.rebuild_settings_header(tech)
 
     # ──────────────────────────────────────────────────────────────────────────
     #  Theme
     # ──────────────────────────────────────────────────────────────────────────
     def _on_theme_toggle(self, is_dark: bool):
         """Slot connected to the ToggleSwitch toggled signal."""
+        logger.info(f"Theme toggled: {'Dark' if is_dark else 'Light'} mode")
         self.dark_mode = is_dark
         self.apply_theme()
-        self.discovery_tab.apply_theme(is_dark)
 
     def apply_theme(self):
         """
@@ -122,11 +132,13 @@ class SpectraLink(QMainWindow):
 
         # 3. Update the Sidebar (includes ToggleSwitch colors)
         self.sidebar.apply_theme(T, self.dark_mode)
+        self.discovery_tab.apply_theme(self.dark_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
 if __name__ == "__main__":
     app = QApplication(sys.argv)
+    setup_logging()
     window = SpectraLink()
     window.show()
     sys.exit(app.exec())

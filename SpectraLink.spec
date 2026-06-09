@@ -13,7 +13,7 @@ else:
 
 
 # Collect all hidden dependencies for the scientific stack
-datas = [('Images', 'Images')]
+datas = [('Images', 'Images'), ('config', 'config')]
 binaries = []
 hiddenimports = [
     'scipy.signal', 
@@ -21,7 +21,11 @@ hiddenimports = [
     'PyQt6', 
     'matplotlib.backends.backend_qt6agg', 
     'requests',
-    'ui.bug_report_dialog'
+    'ui.bug_report_dialog',
+    'processors.abs_processor',
+    'processors.ea_processor',
+    'processors.abs_temp_processor',
+    'processors.ea_temp_processor'
 ]
 
 for pkg in ['scipy', 'pandas', 'matplotlib']:

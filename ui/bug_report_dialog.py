@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (
     QTextEdit, QPushButton, QHBoxLayout, QMessageBox
 )
 from PyQt6.QtCore import Qt
+from utils.app_logger import logger # Import the global logger
 
 class BugReportDialog(QDialog):
     """
@@ -106,9 +107,11 @@ class BugReportDialog(QDialog):
         try:
             response = requests.post(form_url, data=payload, timeout=10)
             if response.status_code == 200:
+                logger.info("Bug report submitted successfully.")
                 QMessageBox.information(self, "Report Submitted", "Thank you! Your feedback has been received.")
                 self.accept()
             else:
+                logger.error(f"Bug report submission failed with status code {response.status_code}")
                 raise Exception(f"Server responded with code {response.status_code}")
         except Exception as e:
             QMessageBox.critical(self, "Submission Failed", f"Could not submit report.\nError: {str(e)}")

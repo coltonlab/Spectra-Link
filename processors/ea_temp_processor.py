@@ -4,6 +4,7 @@ import pandas as pd
 from scipy.signal import savgol_filter
 from pathlib import Path
 from processors.base_processor import BaseProcessor
+from utils.app_logger import logger # Import the global logger
 import processors.public.colton_math_functions as cmf
 
 class EATempProcessor(BaseProcessor):
@@ -50,6 +51,7 @@ class EATempProcessor(BaseProcessor):
                 if "trans" in fpath.lower() or "dc" in fpath.lower(): stype = "Transmission"
                 elif "volt" in fpath.lower() or "ac" in fpath.lower(): stype = "Voltage"
             
+            logger.debug(f"EATempProcessor: Grouping {fpath} as {stype} for {temp}K")
             if stype:
                 groups[temp][stype] = fpath
 
@@ -62,10 +64,13 @@ class EATempProcessor(BaseProcessor):
 
             # We need both files at this temperature to compute the signal
             if not ac_path or not dc_path:
+                logger.warning(f"EATempProcessor: Skipping {temp}K due to missing AC ({ac_path}) or DC ({dc_path}) file.")
                 continue
 
             wl_ac, int_ac = self.load_raw_data(ac_path)
             wl_dc, int_dc = self.load_raw_data(dc_path)
+
+            logger.debug(f"EATempProcessor: Loaded AC for {temp}K (wl_ac is None: {wl_ac is None}), DC (wl_dc is None: {wl_dc is None})")
 
             if wl_ac is not None and wl_dc is not None:
                 # Safety: Ensure DC isn't zero to avoid NaNs/Infs
@@ -85,6 +90,7 @@ class EATempProcessor(BaseProcessor):
         # If a Blank is provided and 'overlay_absorption' is enabled, 
         # calculate ground state absorbance from the Transmission scans.
         if json_data.get("analysis_settings", {}).get("overlay_absorption"):
+            logger.debug("EATempProcessor: Attempting to overlay absorption.")
             blank_path = data_files.get("blank_file")
             wl_b, int_b = self.load_raw_data(blank_path)
             if wl_b is not None:
@@ -145,7 +151,13 @@ class EATempProcessor(BaseProcessor):
 
             cmap = plt.get_cmap(settings.get("colormap_name", "viridis"))
             traces = self._load_traces(json_data)
-            if not traces: return False
+            if not traces:
+                logger.warning(f"EATempProcessor: No traces loaded for {json_data.get('core',{}).get('experiment_name')}. Plotting skipped.")
+                return False
+
+            vals = [t.get("value", 0) for t in traces]
+            vmin, vmax = min(vals), max(vals)
+
 
             vals = [t.get("value", 0) for t in traces]
             vmin, vmax = min(vals), max(vals)
@@ -196,7 +208,7 @@ class EATempProcessor(BaseProcessor):
             for spine in ax.spines.values(): spine.set_linewidth(1.2)
             return True
         except Exception as e:
-            print(f"EATempProcessor error: {e}")
+            logger.exception(f"EATempProcessor.generate_plot error for path: {path}")
             return False
 
     def export_data(self, save_path: str, path=None) -> bool:
@@ -219,5 +231,5 @@ class EATempProcessor(BaseProcessor):
             pd.DataFrame(export_dict).to_csv(save_path, index=False)
             return True
         except Exception as e:
-            print(f"EATempProcessor.export_data error: {e}")
+            logger.exception(f"EATempProcessor.export_data error for path: {path}")
             return False

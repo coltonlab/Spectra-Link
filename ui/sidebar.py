@@ -12,6 +12,7 @@ from ui.toggle_switch import ToggleSwitch
 from ui.dialogs import NewExperimentDialog
 from utils.validators import validate_filename
 from utils.network_service import NetworkService
+from utils.app_logger import logger # Import the global logger
 from utils.project_manager import ProjectManager
 
 class ScanningWorker(QObject):
@@ -56,7 +57,7 @@ class ScanningWorker(QObject):
                 })
 
         except Exception as e:
-            self.errorOccurred.emit(str(e))
+            self.errorOccurred.emit(f"Error in ScanningWorker: {e}") # Emit more descriptive error
 
 class SidebarWidget(QFrame):
     """
@@ -204,7 +205,7 @@ class SidebarWidget(QFrame):
 
     def _handle_worker_error(self, message):
         self._set_loading_state(False)
-        QMessageBox.critical(self, "System Error", f"Background task failed:\n{message}")
+        logger.error(f"Background task failed: {message}") # Log the error
 
     def _populate_tree(self, tree_dict):
         # 1. Capture current expanded state and selection
@@ -454,7 +455,8 @@ class SidebarWidget(QFrame):
                 if not ProjectManager.create_experiment_template(target, name.strip(), technique):
                     QMessageBox.warning(self, "Exists", "Already exists.")
                     return
-                self.update_root() # Full refresh for now
+                self.update_root() # Full refresh
+                logger.info(f"New experiment '{name}' created at {target}")
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
         else:
             name, ok = QInputDialog.getText(self, "New Entry", f"Enter {level} name:")
@@ -468,7 +470,8 @@ class SidebarWidget(QFrame):
                     target = path / collab_name / name
                     ProjectManager.create_folder(target)
                     ProjectManager.create_folder(target / "JSON")
-                self.update_root()
+                self.update_root() # Full refresh
+                logger.info(f"New {level} '{name}' created.")
             except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _show_tree_context_menu(self, pos):
@@ -537,7 +540,9 @@ class SidebarWidget(QFrame):
                 old_path = Path(item.data(Qt.ItemDataRole.UserRole))
             
             ProjectManager.rename_path(old_path, new_name if level != "exp" else f"{new_name}.json")
-            self.update_root()
+            self.update_root() # Full refresh
+            logger.info(f"Renamed {level} from '{old_path.name}' to '{new_name}'")
+
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def _delete_experiment(self, item):
@@ -545,7 +550,9 @@ class SidebarWidget(QFrame):
         if reply != QMessageBox.StandardButton.Yes: return
         try:
             ProjectManager.delete_file(Path(item.data(Qt.ItemDataRole.UserRole)))
-            self.update_root()
+            self.update_root() # Full refresh
+            logger.info(f"Deleted experiment: {item.text()}")
+
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 
     def select_path(self, json_path: Path):

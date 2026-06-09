@@ -13,6 +13,7 @@ from PyQt6.QtGui import QColor, QBrush
 from config.techniques import TECHNIQUE_CONFIG, SCAN_TYPE_COLORS
 from ui.theme import get_theme
 from utils.project_manager import ProjectManager
+from utils.app_logger import logger # Import the global logger
 from utils.discovery_data_mapper import DiscoveryDataMapper
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -658,4 +659,5 @@ class DiscoveryTab(QWidget):
         else:
             T = get_theme(self.parent_window.dark_mode)
             self.lbl_save_status.setText("Save failed — write error.")
+            logger.error(f"Failed to save experiment JSON: {self._current_json_path}")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px;")

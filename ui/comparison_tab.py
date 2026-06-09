@@ -3,12 +3,13 @@ from PyQt6.QtWidgets import (
     QSpinBox, QLabel, QSizePolicy, QPushButton, QMenu
 )
 from PyQt6.QtCore import Qt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from pathlib import Path
 from ui.comparison_settings_panel import ComparisonSettingsPanel
 import json
+from utils.app_logger import logger # Import the global logger
 import matplotlib.pyplot as plt
 
 class ComparisonTab(QWidget):
@@ -277,7 +278,7 @@ class ComparisonTab(QWidget):
                             if len(self._json_cache) < 50: # Cap cache size
                                 self._json_cache[path] = data
                         
-                        tech = data.get("core", {}).get("technique")
+                        tech = data.get("core", {}).get("technique", "Unknown") # Provide default
                         processor = get_processor(tech, self.parent_window)
                         
                         # Pass global overrides to the processor
@@ -287,8 +288,8 @@ class ComparisonTab(QWidget):
                             line_width=gs["line_width"],   # Option 4
                             show_legend=(gs["legend_mode"] == "Individual") # Option 3
                         )
-                    except Exception as e:
-                        print(f"ComparisonTab: Error rendering {path}: {e}")
+                    except Exception:
+                        logger.exception(f"ComparisonTab: Error rendering experiment from path: {path}")
 
                 # Option 2: Clean outer look
                 if gs["label_outer"]:

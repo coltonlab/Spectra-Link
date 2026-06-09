@@ -1,6 +1,7 @@
 import socket
 import platform
 from pathlib import Path
+from utils.app_logger import logger # Import the global logger
 
 class NetworkService:
     """Handles scanning for lab computers and resolving network mount points."""
@@ -22,14 +23,21 @@ class NetworkService:
                 with socket.create_connection((host_ip, 445), timeout=0.2):
                     valid_hosts.append(host)
             except (socket.timeout, ConnectionRefusedError, OSError):
-                continue
+                logger.debug(f"Host {host_ip} not reachable on port 445.")
         return valid_hosts
 
     @staticmethod
     def resolve_base_dir(raw_path: str, is_remote: bool) -> Path:
         """Resolves the 'Data' folder path based on OS and connection mode."""
         if not is_remote or not raw_path:
-            return Path("Data")
+            # Import here to avoid circular dependency
+            import sys
+            import os
+            try:
+                base_path = sys._MEIPASS
+            except AttributeError:
+                base_path = os.path.dirname(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+            return Path(base_path) / "Data"
             
         if platform.system() == "Darwin":
             share_name = raw_path.split('\\')[-1]

@@ -3,8 +3,8 @@ from PyQt6.QtWidgets import (
     QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
-from matplotlib.backends.backend_qt5agg import NavigationToolbar2QT as NavigationToolbar
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
 from pathlib import Path
 
@@ -230,8 +230,8 @@ class AnalysisTab(QWidget):
         if success:
             self.canvas.draw()
             self.status_label.setText("Plot updated")
-        else:
-            self.status_label.setText("Error in processing")
+        else: # If generate_plot returned False
+            self.status_label.setText(f"Error in processing '{tech}' (processor returned False or no data)")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Publication export
@@ -296,7 +296,8 @@ class AnalysisTab(QWidget):
             tech_map = {
                 "Absorption": "ABS",
                 "EA Voltage Series": "EA",
-                "Circular Dichroism (CD)": "CD"
+                "Circular Dichroism (CD)": "CD",
+                "Photoluminescence (PL)": "PL"
             }
             tech_name = tech_map.get(full_tech, "DATA")
             sample_name = initial_dir.name

@@ -3,6 +3,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from pathlib import Path
 from processors.base_processor import BaseProcessor
+from utils.app_logger import logger
 import processors.public.colton_math_functions as cmf
 
 class ABSTempProcessor(BaseProcessor):
@@ -19,7 +20,10 @@ class ABSTempProcessor(BaseProcessor):
 
         # 1. Load Blank
         wl_b, int_b = self.load_raw_data(data_files.get("blank_file"))
-        if wl_b is None: return []
+        if wl_b is None:
+            logger.warning(f"ABSTempProcessor: Blank file not loaded or found for {json_data.get('core',{}).get('experiment_name')}. Cannot calculate absorbance.")
+            return []
+
 
         # 2. Get Series
         scan_list = data_files.get("temperature_scans", []) or data_files.get("sample_scans", [])
@@ -32,6 +36,7 @@ class ABSTempProcessor(BaseProcessor):
             label = f"{temp} K" if temp else "Sample"
             
             wl_s, int_s = self.load_raw_data(rel_path)
+            if wl_s is None: continue # Skip this scan if data couldn't be loaded
             if wl_s is not None:
                 # Interpolate blank onto sample wavelengths
                 int_b_interp = np.interp(wl_s, wl_b, int_b)
@@ -47,32 +52,12 @@ class ABSTempProcessor(BaseProcessor):
 
     def _process_trace(self, wl, ab, settings, trace_idx):
         x, y = wl.copy(), ab.copy()
-
-        # 0. Wavelength Cutoff (nm)
-        w_min = settings.get("min_wavelength", 0.0)
-        w_max = settings.get("max_wavelength", 10000.0)
-        mask = (x >= w_min) & (x <= w_max)
-        x, y = x[mask], y[mask]
-
-        if len(x) == 0:
-            return x, y
-
         if settings.get("smooth_data"):
-            win = int(settings.get("smooth_window", self.SMOOTH_WINDOW))
-            poly = int(settings.get("smooth_poly", self.SMOOTH_POLY))
-            if poly >= win:
-                poly = win - 1
-            if len(y) > win:
-                y = savgol_filter(y, win, poly)
-
+            if len(y) > self.SMOOTH_WINDOW:
+                y = savgol_filter(y, self.SMOOTH_WINDOW, self.SMOOTH_POLY)
         if settings.get("normalize_to_peak"):
             peak = np.max(np.abs(y))
             if peak > 0: y /= peak
-
-        # 3.5 Scaling Factor
-        scaling = settings.get("scaling_factor", 1.0)
-        y = y * scaling
-
         if settings.get("offset_traces"):
             y += trace_idx * self.OFFSET_STEP
         if settings.get("convert_to_ev"):
@@ -98,7 +83,10 @@ class ABSTempProcessor(BaseProcessor):
             cmap = plt.get_cmap(settings.get("colormap_name", "viridis"))
             traces = self._load_traces(json_data)
             num_traces = len(traces)
-            if num_traces == 0: return False
+            if num_traces == 0:
+                logger.warning(f"ABSTempProcessor: No traces loaded for {json_data.get('core',{}).get('experiment_name')}. Plotting skipped.")
+                return False
+
 
             vals = [t.get("value", 0) for t in traces]
             vmin, vmax = min(vals), max(vals)
@@ -138,5 +126,5 @@ class ABSTempProcessor(BaseProcessor):
             for spine in ax.spines.values(): spine.set_linewidth(1.2)
             return True
         except Exception as e:
-            print(f"ABSTempProcessor error: {e}")
+            logger.exception(f"ABSTempProcessor error for path: {path}")
             return False

@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 from pathlib import Path
 from utils.project_manager import ProjectManager
+from utils.app_logger import logger # Import the global logger
 from processors.base_processor import BaseProcessor
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -202,7 +203,7 @@ class ABSProcessor(BaseProcessor):
             return True
 
         except Exception as e:
-            print(f"ABSProcessor.generate_plot error: {e}")
+            logger.exception(f"ABSProcessor.generate_plot error for path: {path}")
             return False
 
     def export_data(self, save_path: str, path=None) -> bool:
@@ -233,8 +234,8 @@ class ABSProcessor(BaseProcessor):
             df = pd.DataFrame(export_dict)
             df.to_csv(save_path, index=False)
             return True
-        except Exception as e:
-            print(f"ABSProcessor.export_data error: {e}")
+        except Exception:
+            logger.exception(f"ABSProcessor.export_data error for path: {path}")
             return False
 
 # if __name__ == "__main__":

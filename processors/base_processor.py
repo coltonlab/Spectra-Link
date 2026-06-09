@@ -4,6 +4,7 @@ from pathlib import Path
 import json
 from utils.project_manager import ProjectManager
 from processors.public.read_colton_files import read_data_simple
+from utils.app_logger import logger # Import the global logger
 
 class BaseProcessor:
     """Base class for all spectroscopic data processors to eliminate code duplication."""
@@ -47,7 +48,7 @@ class BaseProcessor:
                 with open(target_path, 'r') as f:
                     return json.load(f)
             except Exception as e:
-                print(f"BaseProcessor: Error loading JSON from {target_path}: {e}")
+                logger.exception(f"BaseProcessor: Error loading JSON from {target_path}")
                 return {}
         return ProjectManager.Session.get_data()
 
@@ -70,12 +71,17 @@ class BaseProcessor:
         
         full_path = Path(self.parent_window.base_dir) / Path(rel_path)
         if not full_path.exists():
+            logger.warning(f"Data file not found: {full_path}")
             return None, None
 
         try:
             data_dict = read_data_simple(str(full_path))
-            keys = list(data_dict.keys())
-            wl_key = next((k for k in data_dict.keys() if "Spectr" in k), None)
+            if not data_dict:
+                logger.warning(f"File loaded but contained no data: {rel_path}")
+                return None, None
+
+            # More flexible wavelength detection
+            wl_key = next((k for k in data_dict.keys() if any(x in k for x in ["Spectr", "Wavelength", "Energy", "nm", "eV"])), None)
             
             # Priority list: We want signed data (Phased X) over unsigned magnitude (R)
             priority = ["X (V) Phased", "X (V) Phased Average", "Phased (V)", "R (V)", "X (V)"]
@@ -83,8 +89,10 @@ class BaseProcessor:
 
             if wl_key and int_key:
                 return data_dict[wl_key], data_dict[int_key]
+            
+            logger.warning(f"Could not find required columns in {rel_path}. Keys found: {list(data_dict.keys())}")
         except Exception as e:
-            print(f"Error loading {rel_path}: {e}")
+            logger.exception(f"Error loading raw data from {rel_path}")
         return None, None
 
     def save_fixed_plot(self, figure, file_path: str):

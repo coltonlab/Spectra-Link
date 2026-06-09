@@ -6,6 +6,7 @@ from pathlib import Path
 from processors.public.read_colton_files import read_data_simple
 from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import processors.public.colton_math_functions as cmf
+from utils.app_logger import logger # Import the global logger
 from utils.project_manager import ProjectManager
 from processors.base_processor import BaseProcessor
 
@@ -238,7 +239,7 @@ class EAProcessor(BaseProcessor):
             return True
 
         except Exception as e:
-            print(f"EAProcessor.generate_plot error: {e}")
+            logger.exception(f"EAProcessor.generate_plot error for path: {path}")
             return False
 
     def export_data(self, save_path: str, path=None) -> bool:
@@ -272,6 +273,6 @@ class EAProcessor(BaseProcessor):
             df = pd.DataFrame(export_dict)
             df.to_csv(save_path, index=False)
             return True
-        except Exception as e:
-            print(f"EAProcessor.export_data error: {e}")
+        except Exception:
+            logger.exception(f"EAProcessor.export_data error for path: {path}")
             return False

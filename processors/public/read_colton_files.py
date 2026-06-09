@@ -9,6 +9,7 @@ data and return back a dataframe with the raw data and the phased data.
 import pandas as pd
 import numpy as np
 import os
+from utils.app_logger import logger
 from processors.public.colton_math_functions import phase_data, phase_data_experiemnt
 
 # module-level cache
@@ -34,56 +35,65 @@ def read_data_simple(file_path):
         if cached_mtime == mtime:
             return cached_data
 
-    # 1. Detect Header
-    with open(file_path, 'r', encoding="utf-8", errors="ignore") as f:
-        first_chunk = f.read(4000)
-    
-    is_double = False
-    # Detect if we have 2 lock-ins or 1
-    if "X810 (V)" in first_chunk:
-        is_double = True
-        header_str = "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)"
-        print("Detected 2 lock-ins in file:", file_path)
-    elif "X (V)" in first_chunk:
-        header_str = "Digikrom Spectr.:0 (?)	X (V)	Y (V)	R (V)"
-    else:
-        # Fallback for other data types (like PMT or CCD)
-        header_str = None 
+    try:
+        # 1. Detect Header
+        # Use 'latin-1' for initial read to avoid decoding errors with unknown characters
+        with open(file_path, 'r', encoding="latin-1", errors="ignore") as f:
+            first_chunk = f.read(4000)
+        
+        is_double = False
+        # Detect if we have 2 lock-ins or 1
+        if "X810 (V)" in first_chunk:
+            is_double = True
+            header_str = "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)"
+            logger.info(f"Detected 2 lock-ins in file: {file_path}")
+        elif "X (V)" in first_chunk:
+            header_str = "Digikrom Spectr.:0 (?)	X (V)	Y (V)	R (V)"
+        else:
+            # Fallback for other data types (like PMT or CCD)
+            header_str = None 
 
-    # 2. Load into temporary DataFrame
-    if header_str:
-        df = read_data_with_dynamic_header(file_path, header=header_str)
-    else:
-        # Generic load if header detection fails
-        df = pd.read_csv(file_path, sep='\t', skiprows=15, skipfooter=3, engine='python')
-        print("Warning: Could not detect header, loaded with generic settings. File:", file_path)
-    
-    # 3. Handle double lock-in selection
-    if is_double:
-        # --- MANUAL TOGGLES ---
-        # Set one to True and the other to False to select the desired lock-in data
-        USE_830 = True
-        USE_810 = False
-        # ----------------------
+        # 2. Load into temporary DataFrame
+        if header_str:
+            df = read_data_with_dynamic_header(file_path, header=header_str)
+        else:
+            # Generic load if header detection fails
+            df = pd.read_csv(file_path, sep='\t', skiprows=15, skipfooter=3, engine='python')
+            logger.warning(f"Could not detect header, loaded with generic settings. File: {file_path}")
+        
+        # 3. Handle double lock-in selection
+        if is_double:
+            # --- MANUAL TOGGLES ---
+            # Set one to True and the other to False to select the desired lock-in data
+            USE_830 = True
+            USE_810 = False
+            # ----------------------
 
-        wl_col = "Digikrom Spectr.:0 (?)"
-        if USE_830:
-            # Extract 830 data and rename to generic labels for processing
-            df = df[[wl_col, "X830 (V)", "Y830 (V)", "R830 (V)"]].copy()
-            df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
-        elif USE_810:
-            # Extract 810 data and rename to generic labels for processing
-            df = df[[wl_col, "X810 (V)", "Y810 (V)", "R810 (V)"]].copy()
-            df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
+            wl_col = "Digikrom Spectr.:0 (?)"
+            if USE_830:
+                # Extract 830 data and rename to generic labels for processing
+                df = df[[wl_col, "X830 (V)", "Y830 (V)", "R830 (V)"]].copy()
+                df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
+            elif USE_810:
+                # Extract 810 data and rename to generic labels for processing
+                df = df[[wl_col, "X810 (V)", "Y810 (V)", "R810 (V)"]].copy()
+                df.columns = [wl_col, "X (V)", "Y (V)", "R (V)"]
 
-    # 4. Phase the data while it is still a DataFrame
-    df = phase_data(df)
+        # 4. Phase the data while it is still a DataFrame
+        # Ensure 'X (V)' and 'Y (V)' exist before phasing
+        if "X (V)" in df.columns and "Y (V)" in df.columns:
+            df = phase_data(df)
+        else:
+            logger.warning(f"Skipping phasing for {file_path}: 'X (V)' or 'Y (V)' columns not found after initial load. Columns: {df.columns.tolist()}")
 
-    # 5. Convert to a simple dictionary of NumPy arrays
-    data_dict = {col: df[col].to_numpy() for col in df.columns}
+        # 5. Convert to a simple dictionary of NumPy arrays
+        data_dict = {col: df[col].to_numpy() for col in df.columns}
 
-    _data_cache[file_path] = (mtime, data_dict)
-    return data_dict
+        _data_cache[file_path] = (mtime, data_dict)
+        return data_dict
+    except Exception as e:
+        logger.exception(f"Error in read_data_simple for file: {file_path}")
+        return None
 
 # '''
 # read_trans_data reads in the data and phases in accordance to the way the data is outputted.
@@ -261,7 +271,7 @@ This function reads in the data by looking at the "Digikrom Spectr.:0 (?)	X810 (
 def read_data_with_dynamic_header(file_path, header):
     header_index = None
     # Efficiently find the header without loading the whole file into strings
-    with open(file_path, "r", encoding="utf-8") as f:
+    with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
         for i, line in enumerate(f):
             if header in line:
                 header_index = i
