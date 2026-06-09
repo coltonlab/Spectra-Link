@@ -44,7 +44,7 @@ _LIGHT = {
     "border":        "#d4d4e0",
     "border_accent": "#aabcee",
     "text_primary":  "#1a1a2e",
-    "text_secondary":"#6666888",
+    "text_secondary":"#5b6275",
     "text_label":    "#303050",
     "check_bg":      "#e8e8f4",
     "check_active":  "#3a6acc",

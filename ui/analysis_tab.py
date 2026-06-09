@@ -1,6 +1,7 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
-    QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy, QComboBox
+    QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy, QComboBox,
+    QMenu, QMessageBox
 )
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
@@ -117,6 +118,9 @@ class AnalysisTab(QWidget):
         # Matplotlib's built-in zoom/pan/home/save toolbar
         self.nav_toolbar = NavigationToolbar(self.canvas, self)
 
+        # Connect Matplotlib events for right-click interaction
+        self.canvas.mpl_connect('button_press_event', self._on_canvas_click)
+
         plot_frame = QFrame()
         plot_layout = QVBoxLayout(plot_frame)
         plot_layout.setContentsMargins(4, 4, 4, 4)
@@ -203,6 +207,48 @@ class AnalysisTab(QWidget):
         self._on_setting_changed(key, value)
     def _on_option_toggled(self, key: str, checked: bool):
         self._on_setting_changed(key, checked)
+
+    def _on_canvas_click(self, event):
+        """Handle right-click context menu on the plot."""
+        if event.button == 3:  # Right click
+            self._show_context_menu(event)
+
+    def _show_context_menu(self, event):
+        """Display a context menu for the graph."""
+        menu = QMenu(self)
+        reset_act = menu.addAction("Reset to Defalt Settings")
+        reset_act.triggered.connect(self.reset_to_defaults)
+        menu.exec(event.guiEvent.globalPosition().toPoint())
+
+    def reset_to_defaults(self):
+        """Prompt user and reset all current technique settings to their defaults."""
+        tech = self._current_technique
+        if not tech:
+            return
+
+        reply = QMessageBox.question(
+            self, "Reset to Default",
+            f"Are you sure you want to reset all analysis settings for '{tech}' back to default?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            json_data = ProjectManager.Session.get_data()
+            saved = json_data.get("analysis_settings", {})
+            
+            cfg = TECHNIQUE_CONFIG.get(tech, {})
+            options = cfg.get("analysis_options", [])
+
+            # Remove the specific keys for this technique so rebuild_options_toolbar 
+            # repopulates them with defaults defined in ANALYSIS_OPTION_META.
+            for key in options:
+                if key in saved:
+                    del saved[key]
+
+            ProjectManager.Session.save()
+            self.rebuild_options_toolbar(tech)
+            self.execute_plot()
+            self.status_label.setText("Settings reset to defaults.")
 
     # ──────────────────────────────────────────────────────────────────────────
     # Plotting
