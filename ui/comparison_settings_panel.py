@@ -62,9 +62,25 @@ class ComparisonSettingsPanel(QWidget):
         header.setStyleSheet(f"background: {C['bg_section']}; border-bottom: 1px solid {C['border']};")
         h_lay = QHBoxLayout(header)
         title = QLabel("Comparison Visual Settings")
-        title.setStyleSheet("font-weight: 600; color: white;")
+        title.setStyleSheet(f"font-weight: 600; color: {C['text_primary']};")
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(30, 30)
+        close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        close_btn.setStyleSheet(f"""
+            QPushButton {{
+                background: transparent;
+                color: {C['text_primary']};
+                border: none;
+                border-radius: 15px;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 0;
+            }}
+            QPushButton:hover {{
+                background: {C['bg_hover']};
+                color: {C['accent']};
+            }}
+        """)
         close_btn.clicked.connect(self.hide)
         h_lay.addWidget(title)
         h_lay.addStretch()
@@ -92,7 +108,7 @@ class ComparisonSettingsPanel(QWidget):
         self.cont_layout.addWidget(s1)
 
         # 2. Layout
-        s2 = CollapsibleSection("Layout \& Geometry", is_dark)
+        s2 = CollapsibleSection("Layout & Geometry", is_dark)
         self.spin_h = QDoubleSpinBox()
         self.spin_h.setRange(0, 1.0); self.spin_h.setSingleStep(0.05); self.spin_h.setValue(0.1)
         self.spin_h.valueChanged.connect(lambda v: self._upd("hspace", v))

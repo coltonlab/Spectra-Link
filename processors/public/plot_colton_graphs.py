@@ -257,7 +257,10 @@ def color_bar(temperatures, ax, color_map_name, temp=True, pad = 0):
     ticks = np.linspace(0.5, num_temperatures - 1.5, num_temperatures)
 
     # Create the colorbar with equally spaced colors
-    cbar = plt.colorbar(plt.cm.ScalarMappable(cmap=custom_cmap, norm=norm), ax=ax, pad=pad, orientation='vertical')
+    # We use ax.figure.colorbar to ensure the colorbar is attached specifically to the correct 
+    # figure object in a multi-window GUI environment, which preserves shared-axis alignment.
+    mappable = plt.cm.ScalarMappable(cmap=custom_cmap, norm=norm)
+    cbar = ax.figure.colorbar(mappable, ax=ax, pad=pad, orientation='vertical')
 
     # Set the colorbar label
     if temp:

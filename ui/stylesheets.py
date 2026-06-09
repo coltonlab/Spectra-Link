@@ -13,7 +13,7 @@ def build_stylesheet(T) -> str:
 QWidget {{
     background-color: {T.bg_main};
     color: {T.text_primary};
-    font-family: "Segoe UI", "Helvetica Neue", sans-serif;
+    font-family: "Segoe UI Variable", "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
     font-size: 13px;
 }}
 
@@ -371,4 +371,3 @@ QLabel#badge_none {{
     font-size: 11px;
 }}
 """
-

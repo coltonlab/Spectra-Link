@@ -285,13 +285,14 @@ class ComparisonTab(QWidget):
         
         self.figure.clear()
         self._axes_map = {}
+
+        # Apply the spacing from the settings panel using the constrained layout engine
+        # this replaces subplots_adjust which is incompatible with this engine.
+        self.figure.set_constrained_layout_pads(wspace=gs["wspace"], hspace=gs["hspace"])
         
         # Use squeeze=False so axes is always a 2D array [row, col]
-        # sharex=True enables linked zooming across all subplots
+        # sharex=True/all enables linked zooming and panning across the entire grid
         axes = self.figure.subplots(self.rows, self.cols, sharex=True, squeeze=False)
-        
-        # Option 2: Layout Geometry
-        self.figure.subplots_adjust(hspace=gs["hspace"], wspace=gs["wspace"])
         
         # Option 1: Unit Police Logic
         force_unit = None
@@ -353,4 +354,5 @@ class ComparisonTab(QWidget):
                 self.figure.legend(by_label.values(), by_label.keys(), loc='upper center', 
                                    bbox_to_anchor=(0.5, 1.02), ncol=3, frameon=False)
 
+        # Constrained layout handles the final alignment automatically
         self.canvas.draw()

@@ -64,7 +64,7 @@ def _global_stylesheet(C: dict) -> str:
         QWidget {{
             background-color: {C['bg_panel']};
             color: {C['text_primary']};
-            font-family: "SF Pro Display", "Segoe UI Variable", "Helvetica Neue", sans-serif;
+            font-family: "Segoe UI Variable", "Segoe UI", "Inter", "Helvetica Neue", sans-serif;
             font-size: 12px;
         }}
 
@@ -572,25 +572,26 @@ class AnalysisSettingsPanel(QWidget):
             color: {C['text_primary']};
             font-size: 12px;
             font-weight: 600;
-            letter-spacing: 0.3px;
             background: transparent;
             border: none;
         """)
 
         close_btn = QPushButton("✕")
-        close_btn.setFixedSize(24, 24)
+        close_btn.setFixedSize(30, 30)
         close_btn.setCursor(Qt.CursorShape.PointingHandCursor)
         close_btn.setStyleSheet(f"""
             QPushButton {{
                 background: transparent;
-                color: {C['text_secondary']};
+                color: {C['text_primary']};
                 border: none;
-                border-radius: 12px;
-                font-size: 11px;
+                border-radius: 15px;
+                font-size: 18px;
+                font-weight: bold;
+                padding: 0;
             }}
             QPushButton:hover {{
                 background: {C['bg_hover']};
-                color: {C['text_primary']};
+                color: {C['accent']};
             }}
         """)
         close_btn.clicked.connect(self.hide)
