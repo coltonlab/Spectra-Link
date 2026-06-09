@@ -65,7 +65,7 @@ exe = EXE(
     upx=True,
     console=False, 
     disable_windowed_traceback=False,
-    argv_emulation=False,
+    argv_emulation=True if sys.platform == 'darwin' else False,
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
@@ -81,3 +81,11 @@ coll = COLLECT(
     upx_exclude=[],
     name='SpectraLink',
 )
+
+if sys.platform == 'darwin':
+    app = BUNDLE(
+        coll,
+        name='SpectraLink.app',
+        icon=icon_file,
+        bundle_identifier='org.spectralink.app',
+    )
