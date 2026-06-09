@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, 
-    QSpinBox, QLabel, QSizePolicy, QPushButton, QMenu
+    QSpinBox, QLabel, QSizePolicy, QPushButton, QMenu, QMessageBox
 )
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -8,6 +8,7 @@ from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as Navigation
 from matplotlib.figure import Figure
 from pathlib import Path
 from ui.comparison_settings_panel import ComparisonSettingsPanel
+from utils.project_manager import ProjectManager
 import json
 from utils.app_logger import logger # Import the global logger
 import matplotlib.pyplot as plt
@@ -168,6 +169,14 @@ class ComparisonTab(QWidget):
             action = remove_menu.addAction(display_name)
             action.triggered.connect(lambda checked, p=path_str: self._remove_single_experiment(rc, p))
 
+        # --- Reset Defaults Submenu ---
+        reset_menu = menu.addMenu("Reset to Defalt Settings")
+        for path_str in paths:
+            path_obj = Path(path_str)
+            display_name = f"{path_obj.parent.parent.name} / {path_obj.stem}"
+            action = reset_menu.addAction(display_name)
+            action.triggered.connect(lambda checked, p=path_str: self._reset_experiment_settings(p))
+
         menu.addSeparator()
         clear_act = menu.addAction("Clear All in Cell")
         clear_act.triggered.connect(lambda: self._clear_cell(rc))
@@ -187,6 +196,43 @@ class ComparisonTab(QWidget):
         # 3. Open the Analysis Settings panel if it's not already visible
         if not self.parent_window.analysis_tab._settings_panel.isVisible():
             self.parent_window.analysis_tab.toggle_settings_panel()
+
+    def _reset_experiment_settings(self, path_str: str):
+        """Clears the analysis settings for a specific experiment JSON file on disk."""
+        path_obj = Path(path_str)
+        reply = QMessageBox.question(
+            self, "Reset to Default",
+            f"Are you sure you want to reset all analysis settings for '{path_obj.stem}' back to default?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+
+        if reply == QMessageBox.StandardButton.Yes:
+            try:
+                # 1. Read the JSON file
+                with open(path_str, 'r') as f:
+                    data = json.load(f)
+                
+                # 2. Clear the settings (the system will use factory defaults when empty)
+                data["analysis_settings"] = {}
+                
+                # 3. Write back to disk
+                with open(path_str, 'w') as f:
+                    json.dump(data, f, indent=4)
+                
+                # 4. Invalidate the memory cache
+                if path_str in self._json_cache:
+                    del self._json_cache[path_str]
+                
+                # 5. Notify the rest of the app to update (e.g., Analysis and Discovery tabs)
+                self.parent_window.experimentDataChanged.emit(path_str)
+                
+                # 6. If this file is the active session, reload the session object
+                if str(ProjectManager.Session.get_path()) == path_str:
+                    ProjectManager.Session.load_experiment(path_obj)
+                
+                self.rebuild_plots()
+            except Exception as e:
+                print(f"ComparisonTab: Error resetting settings for {path_str}: {e}")
 
     def _remove_single_experiment(self, rc, path_str):
         """Removes a single experiment from a specific grid cell."""
