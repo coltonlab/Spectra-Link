@@ -1,0 +1,51 @@
+Implementing a "Modeling Tab" that feels like a natural extension of your workflow is a significant architectural step. To do this correctly and modularly, we should treat each "Model" (like Franz-Keldysh or a Peak Fitter) as a Plugin that the main tab simply "hosts."
+
+Here is a structured roadmap broken down into logical segments. You can give me these prompts one by one to ensure we build a robust system without getting overwhelmed.
+
+Phase 1: Infrastructure and the "Hosting" Tab
+We first need the container. This tab needs to sit in main.py and listen to the sidebar, just like the Discovery Tab does.
+
+Prompt 1:
+
+"I want to create the boilerplate for the ModelingTab. It should be a new tab in main.py that listens to experimentChanged. When an experiment is selected, it should identify the technique (e.g., 'Electro-Absorption') and prepare a 'stage' where modeling tools can be loaded. For now, just create the UI skeleton with a sidebar for parameters, a central plot area, and a status bar that shows which experiment is being modeled."
+
+Phase 2: The Plugin Architecture (Base Class)
+Since you want this to be flexible, we shouldn't hard-code models into the UI. We need a "Template" that every new model follows.
+
+Prompt 2:
+
+"Define an abstract base class BaseModelingEngine in a new directory modeling_engines/. This class should define the standard interface for any model: how it builds its specific UI, how it pulls data from the ProjectManager.Session, how it performs its math, and how it plots its results. Also, create a ModelingEngineFactory that returns the correct engine based on the experiment's technique."
+
+Phase 3: JSON Persistence & Session Management
+You mentioned wanting to save results. We need to update the ProjectManager and the JSON schema so that if you close the app and come back, your fit parameters are still there.
+
+Prompt 3:
+
+"Let's update ProjectManager.py and the JSON schema to support a modeling namespace. I want to be able to save a dictionary of fit parameters and results directly into the experiment's JSON file. We need to update Session.save() to ensure that when a user tweaks a parameter in the Modeling Tab, it marks the session as 'unsaved' and triggers the autosave logic, similar to the Discovery Tab."
+
+Phase 4: The First Real Model (Franz-Keldysh)
+Now we implement the actual science. We'll build the specific UI and math for one technique to test the whole pipeline.
+
+Prompt 4:
+
+"Implement the FKModelingEngine (Franz-Keldysh). It should inherit from BaseModelingEngine. The UI should have inputs for effective mass and electric field. The math should use the FK_fit function from colton_math_functions.py. Ensure it pulls the 'phased' data created in the Analysis step and overlays the calculated fit on the raw data plot."
+
+Phase 5: Asynchronous Execution & Stale Data Logic
+Scientific modeling can be slow. We need to make sure the UI doesn't freeze during a fit and that the user knows if the underlying data has changed.
+
+Prompt 5:
+
+"Implement a ModelingWorker using QThread so that heavy calculations happen in the background. Also, add 'Stale Data' logic: if the user goes back to the Analysis Tab and changes a smoothing parameter, the Modeling Tab should show a warning that the current fit no longer matches the processed data."
+
+Phase 6: Exporting & Reporting
+The final step is getting the data out for your papers or presentations.
+
+Prompt 6:
+
+"Add an 'Export Results' feature to the Modeling Tab. This should generate a formatted text report or CSV that includes the experiment metadata, the final fit parameters (with uncertainties if available), and the calculated curve data points for use in external plotting software like Origin or Prism."
+
+What to consider for testing as we go:
+Step 1 Test: Does clicking a sidebar item correctly update the "Target" label in the Modeling Tab?
+Step 3 Test: If I type a value into a modeling parameter, does it actually appear in the .json file on my hard drive?
+Step 4 Test: Does the fit curve update in real-time when I change a parameter, or only when I hit a "Run Fit" button?
+Which prompt would you like to start with?

@@ -97,7 +97,8 @@ class ProjectManager:
                 "schema_version": "1.0.0"
             },
             "data_files": {},
-            "parameters": {"temperature": 295.0}
+            "parameters": {"temperature": 295.0},
+            "modeling": {"saved_results": {}}
         }
         return ProjectManager.write_json(path, template)
 

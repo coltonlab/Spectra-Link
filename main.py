@@ -11,6 +11,7 @@ from ui.theme import get_theme, apply_palette_to_app
 from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
 from ui.comparison_tab import ComparisonTab
+from ui.modeling_tab import ModelingTab
 from ui.stylesheets import build_stylesheet
 from utils.app_logger import setup_logging, logger
 from ui.sidebar import SidebarWidget
@@ -80,6 +81,9 @@ class SpectraLink(QMainWindow):
         self.analysis_tab = AnalysisTab(self)
         self.tabs.addTab(self.analysis_tab, "Interactive Analysis")
 
+        self.modeling_tab = ModelingTab(self)
+        self.tabs.addTab(self.modeling_tab, "Modeling Lab")
+
         self.comparison_tab = ComparisonTab(self)
         self.tabs.addTab(self.comparison_tab, "Comparison Basket")
         content_layout.addWidget(self.tabs)
@@ -94,12 +98,14 @@ class SpectraLink(QMainWindow):
 
         # ── Signals ───────────────────────────────────────────────────────────
         self.sidebar.experimentChanged.connect(self._on_exp_changed)
+        self.experimentDataChanged.connect(self.modeling_tab.on_external_data_changed)
 
         self.sidebar.update_root()
         self.apply_theme()
 
     def _on_exp_changed(self):
         self.discovery_tab.refresh_target_label()
+        self.modeling_tab.refresh_target_label()
         tech = getattr(self.discovery_tab, '_current_technique', None)
         
         # Always notify AnalysisTab to rebuild or clear stale states
@@ -133,6 +139,7 @@ class SpectraLink(QMainWindow):
         # 3. Update the Sidebar (includes ToggleSwitch colors)
         self.sidebar.apply_theme(T, self.dark_mode)
         self.discovery_tab.apply_theme(self.dark_mode)
+        self.modeling_tab.apply_theme(self.dark_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────
