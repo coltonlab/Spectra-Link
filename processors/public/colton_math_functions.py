@@ -2,10 +2,10 @@
 This is a conveniant spot to put all of the mathematical functions that the colton group uses. 
 '''
 import numpy as np
-# from scipy.signal import savgol_filter, find_peaks
-# import scipy.special as sps
-# from scipy.optimize import minimize, curve_fit
-# from scipy.interpolate import CubicSpline
+from scipy.signal import savgol_filter, find_peaks
+import scipy.special as sps
+from scipy.optimize import minimize, curve_fit
+from scipy.interpolate import CubicSpline
 from utils.app_logger import logger
 
 '''Calculates the EA signal with the input ea data and transmission data '''
@@ -252,28 +252,23 @@ def phase_data_experiemnt(data, x_name='X (V)', y_name='Y (V)'):
 #
 #
 #
-# def FK_fit(d_1, d_2, d_3, data_to_fit):
-#     # Define the function to minimize
-#     def objective(guess):
-#         a, b = guess
-#         value = np.sum((a * d_1 + b * d_2  - data_to_fit) ** 2)
-#         # print(value)
-#         return value 
-#
-#     # Initial guess for the coefficients
-#     initial_guess = [0.04, 0.06]
-#
-#     # Use SciPy's minimize function to find the best fit coefficients
-#     result = minimize(objective, initial_guess)
-#     # print(result)
-#     logger.debug(f"FK_fit minimization result: {result}")
-#     # Extract the optimal coefficients
-#     a_optimal, b_optimal = result.x
-#     fit = a_optimal*d_1 + b_optimal*d_2
-#     logger.debug(f"FK_fit coefficients: {[result.x]/np.sum(result.x)*100}")
-#
-#     return fit # This function returns `fit` but the original `FK_fit` in `colton_math_functions - Copy.py` returned `fit` as well.
-#
+def FK_fit(d_1, d_2, d_3, data_to_fit):
+    """Minimizes the difference between EA data and absorption derivatives."""
+    def objective(guess):
+        a, b, c = guess
+        fit = a * d_1 + b * d_2 + c * d_3
+        return np.sum((fit - data_to_fit) ** 2)
+
+    initial_guess = [0.01, 0.01, 0.01]
+    result = minimize(objective, initial_guess)
+    
+    if not result.success:
+        logger.error(f"FK_fit failed: {result.message}")
+        return data_to_fit * 0
+
+    a, b, c = result.x
+    return a * d_1 + b * d_2 + c * d_3
+
 #
 #
 # def difference_to_sum_ratio(A,B):
