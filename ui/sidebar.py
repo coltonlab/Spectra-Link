@@ -46,8 +46,12 @@ class ScanningWorker(QObject):
                         samples = ProjectManager.list_folders(c_path)
                         for s in samples:
                             s_path = c_path / s
-                            json_dir = s_path / "JSON"
-                            exps = ProjectManager.list_experiments(json_dir) if json_dir.exists() else []
+                            if s == "Comparison Plots":
+                                # Configs are stored directly in this folder
+                                exps = ProjectManager.list_experiments(s_path)
+                            else:
+                                json_dir = s_path / "JSON"
+                                exps = ProjectManager.list_experiments(json_dir) if json_dir.exists() else []
                             tree_data[c][s] = exps
                 
                 self.resultReady.emit(task_id, {
@@ -244,8 +248,9 @@ class SidebarWidget(QFrame):
                 self.tree_view.setExpanded(c_item.index(), True)
 
             for sample, exps in sorted(samples.items()):
+                is_config_dir = (sample == "Comparison Plots")
                 s_item = QStandardItem(sample)
-                s_item.setData("sample", Qt.ItemDataRole.UserRole + 1)
+                s_item.setData("sample" if not is_config_dir else "config_dir", Qt.ItemDataRole.UserRole + 1)
                 c_item.appendRow(s_item)
                 
                 if (collab, sample) in expanded_samples:
@@ -253,9 +258,12 @@ class SidebarWidget(QFrame):
 
                 for exp in sorted(exps):
                     e_item = QStandardItem(exp)
-                    e_item.setData("exp", Qt.ItemDataRole.UserRole + 1)
+                    e_item.setData("exp" if not is_config_dir else "config", Qt.ItemDataRole.UserRole + 1)
                     # Store absolute path for easy access
-                    path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
+                    if is_config_dir:
+                        path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / f"{exp}.json"
+                    else:
+                        path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
                     path_str = str(path)
                     e_item.setData(path_str, Qt.ItemDataRole.UserRole)
                     s_item.appendRow(e_item)
@@ -393,6 +401,11 @@ class SidebarWidget(QFrame):
             path = Path(item.data(Qt.ItemDataRole.UserRole))
             ProjectManager.Session.load_experiment(path)
             self.experimentChanged.emit()
+        elif level == "config":
+            # Switch to Comparison Tab and load the configuration
+            path = Path(item.data(Qt.ItemDataRole.UserRole))
+            self.parent_window.tabs.setCurrentWidget(self.parent_window.comparison_tab)
+            self.parent_window.comparison_tab.load_config_from_path(path)
         else:
             # Toggle expansion for folders
             if self.tree_view.isExpanded(index):
@@ -464,7 +477,10 @@ class SidebarWidget(QFrame):
 
             try:
                 path = self.parent_window.base_dir / "SpectraLink_Data"
-                if level == "collab": ProjectManager.create_folder(path / name)
+                if level == "collab": 
+                    target = path / name
+                    ProjectManager.create_folder(target)
+                    ProjectManager.create_folder(target / "Comparison Plots")
                 else: 
                     collab_name = current_item.text() if current_item.data(Qt.ItemDataRole.UserRole + 1) == "collab" else current_item.parent().text()
                     target = path / collab_name / name
@@ -502,11 +518,14 @@ class SidebarWidget(QFrame):
         add_act = None
         if level == "collab":
             add_act = menu.addAction("Add New Sample...")
+            menu.addSeparator() # Add separator after "Add New Sample"
         elif level == "sample":
             add_act = menu.addAction("Add New Experiment...")
 
         rename_act = menu.addAction(f"Rename '{current_name}'")
-        delete_act = menu.addAction(f"Delete '{current_name}'") if level == "exp" else None
+        delete_act = None
+        if level == "exp" or level == "config": # Add delete action for both experiments and configs
+            delete_act = menu.addAction(f"Delete '{current_name}'")
         
         menu.addSeparator()
         expand_all_act = menu.addAction("Expand All")
@@ -519,7 +538,9 @@ class SidebarWidget(QFrame):
             self.create_new_entry("sample" if level == "collab" else "exp", item)
         elif action == rename_act:
             self._rename_item(item, level)
-        elif action == delete_act:
+        elif action == delete_act and level == "config":
+            self._delete_comparison_config(item)
+        elif action == delete_act and level == "exp": # Handle experiment deletion
             self._delete_experiment(item)
         elif action == expand_all_act:
             self.tree_view.expandAll()
@@ -552,6 +573,18 @@ class SidebarWidget(QFrame):
             ProjectManager.delete_file(Path(item.data(Qt.ItemDataRole.UserRole)))
             self.update_root() # Full refresh
             logger.info(f"Deleted experiment: {item.text()}")
+
+        except Exception as e: QMessageBox.critical(self, "Error", str(e))
+
+    def _delete_comparison_config(self, item):
+        """Deletes a comparison configuration file from disk."""
+        file_path = Path(item.data(Qt.ItemDataRole.UserRole))
+        reply = QMessageBox.question(self, "Delete", f"Delete '{item.text()}'?", QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        if reply != QMessageBox.StandardButton.Yes: return
+        try:
+            ProjectManager.delete_file(Path(item.data(Qt.ItemDataRole.UserRole)))
+            self.update_root() # Full refresh
+            logger.info(f"Deleted comparison configuration: {item.text()}")
 
         except Exception as e: QMessageBox.critical(self, "Error", str(e))
 

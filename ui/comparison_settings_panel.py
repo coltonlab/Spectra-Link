@@ -149,3 +149,21 @@ class ComparisonSettingsPanel(QWidget):
 
     def get_settings(self):
         return self.settings
+
+    def set_settings(self, new_settings: dict):
+        """
+        Applies new settings to the panel widgets and updates the internal settings dictionary.
+        This is used when loading a comparison configuration.
+        """
+        self.settings.update(new_settings)
+        
+        # Update UI widgets without emitting signals immediately
+        self.unit_combo.setCurrentText(self.settings.get("force_unit", "None (Use Saved)"))
+        self.chk_sync_y.setChecked(self.settings.get("sync_y", False))
+        self.spin_h.setValue(self.settings.get("hspace", 0.1))
+        self.chk_outer.setChecked(self.settings.get("label_outer", True))
+        self.leg_combo.setCurrentText(self.settings.get("legend_mode", "Individual"))
+        self.spin_lw.setValue(self.settings.get("line_width", 1.5))
+        
+        # Emit signal once after all settings are applied
+        self.settingChanged.emit()

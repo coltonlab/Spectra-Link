@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QFrame, 
-    QSpinBox, QLabel, QSizePolicy, QPushButton, QMenu, QMessageBox
+    QSpinBox, QLabel, QSizePolicy, QPushButton, QMenu, QMessageBox, QFileDialog, QInputDialog
 )
 from PyQt6.QtCore import Qt
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
@@ -79,6 +79,10 @@ class ComparisonTab(QWidget):
         self.btn_clear = QPushButton("Clear Grid")
         self.btn_clear.clicked.connect(self.clear_grid)
         ctrl_layout.addWidget(self.btn_clear)
+        
+        self.btn_save_config = QPushButton("Save Configuration")
+        self.btn_save_config.clicked.connect(self._save_comparison_config)
+        ctrl_layout.addWidget(self.btn_save_config)
         
         ctrl_layout.addStretch()
         layout.addWidget(ctrl_frame)
@@ -277,6 +281,144 @@ class ComparisonTab(QWidget):
             self.grid_data[key].append(path_str)
             event.acceptProposedAction()
             self.rebuild_plots()
+
+    def _save_comparison_config(self):
+        """
+        Saves the current comparison grid configuration to the 'Comparison Plots' folder
+        of the collaborator associated with the experiment in the top-left cell (0,0).
+        """
+        # 1. Identify reference experiment from the Row 1, Col 1 cell (index 0,0)
+        paths = self.grid_data.get((0, 0), []) # This is a list of paths
+        if not paths:
+            QMessageBox.warning(self, "Missing Reference", 
+                "Please add at least one experiment to the top-left cell (Row 1, Col 1) "
+                "so the system knows which collaborator folder to save in.")
+            return
+
+        # 2. Extract collaborator name from the reference path
+        # Structure: .../SpectraLink_Data/[Collaborator]/[Sample]/JSON/[File].json
+        ref_path = Path(paths[0])
+        try:
+            collab_name = ref_path.parent.parent.parent.name
+            save_dir = self.parent_window.base_dir / "SpectraLink_Data" / collab_name / "Comparison Plots"
+            save_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as e:
+            QMessageBox.critical(self, "Path Error", f"Could not determine save location: {e}")
+            return
+
+        # 3. Ask user for a filename via text input
+        name, ok = QInputDialog.getText(self, "Save Comparison Plot", "Enter a name for this comparison configuration:")
+        if not ok or not name.strip():
+            return
+        
+        file_path = save_dir / f"{name.strip()}.json"
+
+        try:
+            # Convert tuple keys in grid_data to strings for JSON serialization
+            serializable_grid_data = {
+                f"{r},{c}": [
+                    {
+                        "path": path_str,
+                        "analysis_settings": (
+                            # Try to get from cache first, otherwise hit disk
+                            self._json_cache.get(path_str, {}).get("analysis_settings") or 
+                            (lambda p: (json.load(open(p, 'r')) if Path(p).exists() else {}).get("analysis_settings", {}))(path_str)
+                            if not self._json_cache.get(path_str) else 
+                            self._json_cache[path_str].get("analysis_settings", {})
+                        ) if path_str in self._json_cache else 
+                        # Safe one-liner to read disk if not in cache
+                        json.load(open(path_str, 'r')).get("analysis_settings", {}) if Path(path_str).exists() else {}
+                    }
+                    for path_str in paths_list
+                ]
+                for (r, c), paths_list in self.grid_data.items()
+            }
+            
+            config_data = {
+                "rows": self.rows,
+                "cols": self.cols,
+                "grid_data": serializable_grid_data,
+                "settings": self.settings_panel.get_settings()
+            }
+            
+            with open(file_path, 'w') as f:
+                json.dump(config_data, f, indent=4)
+            
+            logger.info(f"Comparison configuration saved to: {file_path}")
+            
+            # Refresh sidebar so the new config appears in the tree
+            self.parent_window.sidebar.update_root()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Save Error", f"Failed to save configuration: {e}")
+            logger.exception(f"Error saving comparison configuration to {file_path}")
+
+    def load_config_from_path(self, file_path: Path):
+        """Loads a comparison configuration from a specific file path."""
+        try:
+            with open(file_path, 'r') as f:
+                config_data = json.load(f)
+            
+            # Validate required keys
+            if not all(k in config_data for k in ["rows", "cols", "grid_data", "settings"]):
+                raise ValueError("Invalid configuration file format.")
+            
+            # Clear current grid and cache
+            self.clear_grid()
+            
+            # Update rows and cols
+            self.rows = config_data["rows"]
+            self.cols = config_data["cols"]
+            self.spin_rows.setValue(self.rows)
+            self.spin_cols.setValue(self.cols)
+            
+            # Deserialize grid_data: convert string keys back to tuples
+            self.grid_data = {
+                tuple(map(int, k.split(','))): v
+                for k, v in config_data["grid_data"].items()
+            }
+            
+            # Apply individual experiment analysis settings
+            new_grid_data = {}
+            for (r, c), experiments_with_settings in self.grid_data.items():
+                paths_for_cell = []
+                for exp_data in experiments_with_settings:
+                    path_str = exp_data["path"]
+                    loaded_analysis_settings = exp_data["analysis_settings"]
+                    path_obj = Path(path_str)
+                    
+                    # Update the actual experiment JSON file on disk safely
+                    if path_obj.exists():
+                        try:
+                            with open(path_str, 'r') as f:
+                                exp_json = json.load(f)
+                            exp_json["analysis_settings"] = loaded_analysis_settings
+                            with open(path_str, 'w') as f:
+                                json.dump(exp_json, f, indent=4)
+                        except Exception as e:
+                            logger.error(f"Failed to update settings for {path_str}: {e}")
+                    
+                    # Invalidate cache and notify other tabs
+                    if path_str in self._json_cache: 
+                        del self._json_cache[path_str]
+                    
+                    # If this experiment is the active session, reload it to reflect changes in Analysis Tab
+                    if str(ProjectManager.Session.get_path()) == path_str:
+                        ProjectManager.Session.load_experiment(path_obj)
+                        
+                    self.parent_window.experimentDataChanged.emit(path_str)
+                    paths_for_cell.append(path_str)
+                new_grid_data[(r, c)] = paths_for_cell
+            self.grid_data = new_grid_data
+            
+            # Apply settings to the settings panel
+            self.settings_panel.set_settings(config_data["settings"])
+            
+            self.rebuild_plots()
+            logger.info(f"Comparison configuration loaded from: {file_path}")
+        except Exception as e:
+            QMessageBox.critical(self, "Load Error", f"Failed to load configuration: {e}")
+            logger.exception(f"Error loading comparison configuration from {file_path}")
 
     def rebuild_plots(self):
         """Re-generates the grid of subplots based on current rows/cols and grid_data."""
