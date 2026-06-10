@@ -274,6 +274,8 @@ COLOR_GRADIENTS = [
     "viridis",
     "plasma",
     "inferno",
+    "ocean",
+    "winter",
     "magma",
     "cividis",
     "Greys",

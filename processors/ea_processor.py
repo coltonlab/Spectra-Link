@@ -156,7 +156,10 @@ class EAProcessor(BaseProcessor):
 
             tech = json_data.get("core", {}).get("technique", "")
             # Get colormap for plotting
-            colormap_name = settings.get("colormap_name", "viridis") # Default to 'viridis'
+            colormap_name = settings.get("colormap_name", "viridis")
+            if settings.get("reverse_colormap", False):
+                colormap_name += "_r"
+            
             cmap = plt.get_cmap(colormap_name)
 
             # Load traces once for efficiency and color mapping
@@ -167,7 +170,11 @@ class EAProcessor(BaseProcessor):
 
             # Determine values for the colorbar
             vals = [t.get("value", 0) for t in traces]
-            vmin, vmax = min(vals), max(vals)
+            max_val = max(vals) if vals else 0
+            # Anchor 0 to the 0.1 color position and Max data to the 0.9 position.
+            # This uses the high-contrast middle 80% of the colormap.
+            vmin = -max_val / 8.0 if max_val > 0 else -1.0
+            vmax = max_val * 1.125 if max_val > 0 else 1.0
             norm = plt.Normalize(vmin=vmin, vmax=vmax)
 
             # Add horizontal line at Y=0 if enabled
@@ -209,6 +216,8 @@ class EAProcessor(BaseProcessor):
                 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
                 # pad=0.02 pulls it closer, fraction=0.04 makes it thin, aspect=30 makes it tall
                 cbar = figure.colorbar(sm, ax=ax, orientation='vertical', pad=0.02, fraction=0.04, aspect=30)
+                # Limit the colorbar display to the actual data range [0, Max]
+                cbar.ax.set_ylim(0, max_val)
                 cb_label = "Voltage (V)" if "Voltage" in tech else "Temp (K)"
                 cbar.set_label(cb_label, fontsize=9)
                 cbar.ax.tick_params(labelsize=8)
