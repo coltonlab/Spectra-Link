@@ -316,24 +316,38 @@ class ComparisonTab(QWidget):
         file_path = save_dir / f"{name.strip()}.json"
 
         try:
-            # Convert tuple keys in grid_data to strings for JSON serialization
-            serializable_grid_data = {
-                f"{r},{c}": [
-                    {
-                        "path": Path(path_str).relative_to(data_root).as_posix(),
-                        "analysis_settings": (
-                            # Try to get from cache first, otherwise hit disk
-                            self._json_cache.get(path_str, {}).get("analysis_settings") or 
-                            (lambda p: (json.load(open(p, 'r', encoding='utf-8')) if Path(p).exists() else {}).get("analysis_settings", {}))(path_str)
-                            if not self._json_cache.get(path_str) else 
-                            self._json_cache[path_str].get("analysis_settings", {})
-                        ) if path_str in self._json_cache else 
-                        json.load(open(path_str, 'r', encoding='utf-8')).get("analysis_settings", {}) if Path(path_str).exists() else {}
-                    }
-                    for path_str in paths_list
-                ]
-                for (r, c), paths_list in self.grid_data.items()
-            }
+            serializable_grid_data = {}
+            for (r, c), paths_list in self.grid_data.items():
+                cell_key = f"{r},{c}"
+                cell_entries = []
+                for path_str in paths_list:
+                    p_obj = Path(path_str)
+                    
+                    # Robust relativization: Extract the path part relative to SpectraLink_Data.
+                    # This ensures cross-platform compatibility (Mac /Volumes vs Windows UNC).
+                    try:
+                        # Standard way first
+                        rel_path = p_obj.relative_to(data_root).as_posix()
+                    except ValueError:
+                        # Fallback: manual extraction if roots don't match (e.g. cross-platform mount issues)
+                        path_parts = p_obj.parts
+                        if "SpectraLink_Data" in path_parts:
+                            idx = path_parts.index("SpectraLink_Data")
+                            rel_path = "/".join(path_parts[idx+1:])
+                        else:
+                            # Last resort: just the filename
+                            rel_path = p_obj.name
+                    
+                    # Get analysis settings efficiently
+                    settings = self._json_cache.get(path_str, {}).get("analysis_settings")
+                    if settings is None:
+                        settings = ProjectManager.read_json(p_obj).get("analysis_settings", {})
+
+                    cell_entries.append({
+                        "path": rel_path,
+                        "analysis_settings": settings
+                    })
+                serializable_grid_data[cell_key] = cell_entries
             
             config_data = {
                 "rows": self.rows,
@@ -386,7 +400,15 @@ class ComparisonTab(QWidget):
             for (r, c), experiments_with_settings in self.grid_data.items():
                 paths_for_cell = []
                 for exp_data in experiments_with_settings:
-                    rel_path = exp_data["path"]
+                    rel_path = str(exp_data["path"])
+                    
+                    # Robust expansion: ensure we only take the hierarchy below SpectraLink_Data.
+                    # This fixes issues where configs saved on other platforms might have absolute-looking paths.
+                    for marker in ["SpectraLink_Data/", "SpectraLink_Data\\"]:
+                        if marker in rel_path:
+                            rel_path = rel_path.split(marker)[-1]
+                            break
+                        
                     path_obj = data_root / rel_path
                     path_str = str(path_obj)
                     loaded_analysis_settings = exp_data["analysis_settings"]
@@ -466,11 +488,12 @@ class ComparisonTab(QWidget):
                         if path in self._json_cache:
                             data = self._json_cache[path]
                         else:
-                            with open(path, 'r') as f:
-                                data = json.load(f)
-                            if len(self._json_cache) < 50: # Cap cache size
+                            data = ProjectManager.read_json(Path(path))
+                            if data and len(self._json_cache) < 50: # Cap cache size
                                 self._json_cache[path] = data
-                        
+
+                        if not data: continue
+
                         tech = data.get("core", {}).get("technique", "Unknown") # Provide default
                         processor = get_processor(tech, self.parent_window)
                         
