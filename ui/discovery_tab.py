@@ -7,7 +7,7 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QSpinBox, QDoubleSpinBox, QFrame,
     QDialog, QLineEdit, QPlainTextEdit, QDialogButtonBox, QFormLayout, QMenu
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, QRunnable, QThreadPool, pyqtSlot, QObject, pyqtSignal
 from PyQt6.QtGui import QColor, QBrush
 
 from config.techniques import TECHNIQUE_CONFIG, SCAN_TYPE_COLORS
@@ -15,6 +15,29 @@ from ui.theme import get_theme
 from utils.project_manager import ProjectManager
 from utils.app_logger import logger # Import the global logger
 from utils.discovery_data_mapper import DiscoveryDataMapper
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Background Save Worker
+# ──────────────────────────────────────────────────────────────────────────────
+class SaveSignals(QObject):
+    finished = pyqtSignal(bool)
+
+class SaveWorker(QRunnable):
+    """Task to write JSON data to disk in a background thread."""
+    def __init__(self, path, data):
+        super().__init__()
+        self.path = path
+        self.data = data
+        self.signals = SaveSignals()
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            success = ProjectManager.write_json(self.path, self.data)
+            self.signals.finished.emit(success)
+        except Exception as e:
+            logger.error(f"Background save failed for {self.path}: {e}")
+            self.signals.finished.emit(False)
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Discovery / Selection tab
@@ -687,16 +710,26 @@ class DiscoveryTab(QWidget):
             return
 
         DiscoveryDataMapper.sync_ui_to_session(self)
+        
+        # Get a copy of the data to ensure thread safety
+        import copy
+        data_snapshot = copy.deepcopy(ProjectManager.Session.get_data())
 
-        # Now save the session data to disk
-        if ProjectManager.Session.save():
-            T = get_theme(self.parent_window.dark_mode)
+        # Offload the disk I/O to the global thread pool
+        worker = SaveWorker(self._current_json_path, data_snapshot)
+        worker.signals.finished.connect(self._on_save_finished)
+        QThreadPool.globalInstance().start(worker)
+
+        # Update UI to "Saving..."
+        self.lbl_save_status.setText("Saving…")
+
+    def _on_save_finished(self, success: bool):
+        """Update the UI based on the result of the background save."""
+        T = get_theme(self.parent_window.dark_mode)
+        if success:
             self.lbl_save_status.setText("✓  Saved")
             self.lbl_save_status.setStyleSheet(f"color: {T.save_success_fg}; font-size: 10px; font-style: italic;")
-            # Notify other tabs of data/metadata changes
             self.parent_window.experimentDataChanged.emit(str(self._current_json_path))
         else:
-            T = get_theme(self.parent_window.dark_mode)
-            self.lbl_save_status.setText("Save failed — write error.")
-            logger.error(f"Failed to save experiment JSON: {self._current_json_path}")
-            self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px;")
+            self.lbl_save_status.setText("Save failed! (Network error)")
+            self.lbl_save_status.setStyleSheet(f"color: {T.save_error_fg}; font-size: 10px; font-weight: bold;")

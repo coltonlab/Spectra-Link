@@ -3,7 +3,7 @@ from PyQt6.QtWidgets import (
     QLabel, QFrame, QCheckBox, QFileDialog, QSizePolicy, QComboBox,
     QMenu, QMessageBox
 )
-from PyQt6.QtCore import Qt
+from PyQt6.QtCore import Qt, QRunnable, QThreadPool, pyqtSlot
 from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.backends.backend_qtagg import NavigationToolbar2QT as NavigationToolbar
 from matplotlib.figure import Figure
@@ -13,6 +13,24 @@ from utils.project_manager import ProjectManager
 from config.techniques import TECHNIQUE_CONFIG, ANALYSIS_OPTION_META
 from processors.factory import get_processor
 from ui.analysis_settings_panel import AnalysisSettingsPanel, _palette
+from utils.app_logger import logger
+
+# ──────────────────────────────────────────────────────────────────────────────
+#  Background Save Worker
+# ──────────────────────────────────────────────────────────────────────────────
+class SaveWorker(QRunnable):
+    """Task to write JSON data to disk in a background thread."""
+    def __init__(self, path, data):
+        super().__init__()
+        self.path = path
+        self.data = data
+
+    @pyqtSlot()
+    def run(self):
+        try:
+            ProjectManager.write_json(self.path, self.data)
+        except Exception as e:
+            logger.error(f"Background analysis save failed for {self.path}: {e}")
  
 
 class AnalysisTab(QWidget):
@@ -194,12 +212,18 @@ class AnalysisTab(QWidget):
             json_data["analysis_settings"] = {}
         json_data["analysis_settings"][key] = value
 
-        # Persist to disk
-        ProjectManager.Session.save()
+        # 1. Background Persist to disk (don't block the UI)
+        current_path = ProjectManager.Session.get_path()
+        if current_path:
+            import copy
+            data_snapshot = copy.deepcopy(json_data)
+            worker = SaveWorker(current_path, data_snapshot)
+            QThreadPool.globalInstance().start(worker)
         
         # Notify other tabs (Comparison Basket) that this experiment's settings changed
-        self.parent_window.experimentDataChanged.emit(str(ProjectManager.Session.get_path()))
+        self.parent_window.experimentDataChanged.emit(str(current_path))
 
+        # 2. Replot immediately using the in-memory data
         self.execute_plot(trigger_key=key)
 
     # Public alias used by external callers in the original code

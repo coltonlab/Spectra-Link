@@ -1,5 +1,7 @@
 import os
 import json
+import time
+import tempfile
 from pathlib import Path
 from utils.app_logger import logger # Import the global logger
 
@@ -38,7 +40,11 @@ class ProjectManager:
         def save(cls) -> bool:
             """Persists the current in-memory data to disk."""
             if cls._current_path:
-                return ProjectManager.write_json(cls._current_path, cls._cached_data)
+                # Creating a deep copy is safer when passing to a background thread
+                # to avoid dictionary mutation issues during JSON serialization.
+                import copy
+                data_to_save = copy.deepcopy(cls._cached_data)
+                return ProjectManager.write_json(cls._current_path, data_to_save)
             return False
 
     @staticmethod
@@ -75,11 +81,27 @@ class ProjectManager:
     @staticmethod
     def write_json(path: Path, data: dict) -> bool:
         """Writes a dictionary to a JSON file with standard indentation."""
+        # Atomic Write Pattern: Write to a temp file first, then rename.
+        # This prevents file corruption if the network/app crashes mid-write.
+        temp_path = path.with_suffix(path.suffix + ".tmp")
         try:
             path.parent.mkdir(parents=True, exist_ok=True)
-            with open(path, 'w', encoding='utf-8') as f:
+            
+            # 1. Write to the temporary file
+            with open(temp_path, 'w', encoding='utf-8') as f:
                 json.dump(data, f, indent=4)
-            logger.debug(f"JSON written to {path}")
+            
+            # 2. Perform an atomic replace
+            # os.replace is atomic on both Windows and POSIX
+            try:
+                os.replace(temp_path, path)
+            except PermissionError:
+                # Sometimes network drives or antivirus lock files momentarily
+                logger.warning(f"File {path} locked. Retrying...")
+                time.sleep(0.2)
+                os.replace(temp_path, path)
+            
+            logger.debug(f"Atomic JSON write successful for {path}")
             return True
         except Exception as e:
             logger.error(f"Error writing JSON to {path}: {e}")
@@ -97,8 +119,7 @@ class ProjectManager:
                 "schema_version": "1.0.0"
             },
             "data_files": {},
-            "parameters": {"temperature": 295.0},
-            "modeling": {"saved_results": {}}
+            "parameters": {"temperature": 295.0}
         }
         return ProjectManager.write_json(path, template)
 

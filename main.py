@@ -1,8 +1,8 @@
 import sys
 import os
 from pathlib import Path
-from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter, QSplashScreen
-from PyQt6.QtCore import Qt, pyqtSignal
+from PyQt6.QtWidgets import QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QTabWidget, QSplitter, QSplashScreen, QMessageBox
+from PyQt6.QtCore import Qt, pyqtSignal, QStandardPaths, QTimer
 from PyQt6.QtGui import QIcon, QPixmap
 
 from ui.theme import get_theme, apply_palette_to_app
@@ -11,7 +11,6 @@ from ui.theme import get_theme, apply_palette_to_app
 from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
 from ui.comparison_tab import ComparisonTab
-from ui.modeling_tab import ModelingTab
 from ui.stylesheets import build_stylesheet
 from utils.app_logger import setup_logging, logger
 from ui.sidebar import SidebarWidget
@@ -26,12 +25,23 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 def get_base_data_dir():
-    """ Get absolute path to Data directory, works for dev and PyInstaller """
-    try:
-        base_path = sys._MEIPASS
-    except AttributeError:
-        base_path = os.path.dirname(os.path.abspath(__file__))
-    return Path(base_path) / "Data"
+    """
+    Gets a persistent path for data. 
+    Avoids sys._MEIPASS because that folder is temporary and deleted on exit.
+    """
+    # 1. Check for Lab Standard C:\Data (Physical Lab Machine)
+    if sys.platform == "win32":
+        lab_root = Path("C:/Data")
+        if lab_root.exists():
+            return lab_root
+
+    # 2. Check for 'Data' folder next to the executable/script (Portable Mode)
+    local_data = Path(os.path.abspath(os.path.dirname(sys.argv[0]))) / "Data"
+    if local_data.exists():
+        return local_data
+
+    # 3. Fallback to User Documents (Standard Installation)
+    return Path(QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)) / "SpectraLink_Data"
 
 # ──────────────────────────────────────────────────────────────────────────────
 #  Main window
@@ -81,9 +91,6 @@ class SpectraLink(QMainWindow):
         self.analysis_tab = AnalysisTab(self)
         self.tabs.addTab(self.analysis_tab, "Interactive Analysis")
 
-        self.modeling_tab = ModelingTab(self)
-        self.tabs.addTab(self.modeling_tab, "Modeling Lab")
-
         self.comparison_tab = ComparisonTab(self)
         self.tabs.addTab(self.comparison_tab, "Comparison Basket")
         content_layout.addWidget(self.tabs)
@@ -98,14 +105,12 @@ class SpectraLink(QMainWindow):
 
         # ── Signals ───────────────────────────────────────────────────────────
         self.sidebar.experimentChanged.connect(self._on_exp_changed)
-        self.experimentDataChanged.connect(self.modeling_tab.on_external_data_changed)
 
         self.sidebar.update_root()
         self.apply_theme()
 
     def _on_exp_changed(self):
         self.discovery_tab.refresh_target_label()
-        self.modeling_tab.refresh_target_label()
         tech = getattr(self.discovery_tab, '_current_technique', None)
         
         # Always notify AnalysisTab to rebuild or clear stale states
@@ -139,7 +144,6 @@ class SpectraLink(QMainWindow):
         # 3. Update the Sidebar (includes ToggleSwitch colors)
         self.sidebar.apply_theme(T, self.dark_mode)
         self.discovery_tab.apply_theme(self.dark_mode)
-        self.modeling_tab.apply_theme(self.dark_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

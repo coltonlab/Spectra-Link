@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QPushButton, QCheckBox, QInputDialog, QMessageBox, QMenu,
     QApplication
 )
-from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint, QObject, QThread, pyqtSlot, QModelIndex
+from PyQt6.QtCore import Qt, pyqtSignal, QMimeData, QPoint, QObject, QThread, pyqtSlot, QModelIndex, QPersistentModelIndex, QTimer
 from PyQt6.QtGui import QDrag, QPixmap, QPainter, QColor, QStandardItemModel, QStandardItem
 
 from ui.theme import get_theme
@@ -34,7 +34,7 @@ class ScanningWorker(QObject):
                     params.get("host"), params.get("is_remote")
                 )
                 
-                # 3. List Collaborators
+                # 3. List Collaborators (Recursive Scan)
                 data_root = base_dir / "SpectraLink_Data"
                 tree_data = {}
                 
@@ -56,7 +56,7 @@ class ScanningWorker(QObject):
                 
                 self.resultReady.emit(task_id, {
                     "hosts": hosts, 
-                    "base_dir": base_dir, 
+                    "base_dir": base_dir,
                     "tree_data": tree_data
                 })
 
@@ -203,22 +203,23 @@ class SidebarWidget(QFrame):
                     self.combo_network.setCurrentText(current)
                 self.combo_network.blockSignals(False)
             
-            self.parent_window.base_dir = data["base_dir"]
+            # Ensure base_dir is updated before triggering children fetch
+            self.parent_window.base_dir = Path(data["base_dir"])
             self._populate_tree(data["tree_data"])
             self.toggle_buttons()
 
     def _handle_worker_error(self, message):
         self._set_loading_state(False)
         logger.error(f"Background task failed: {message}") # Log the error
+        QMessageBox.warning(self, "Connection Error", f"The sidebar could not be populated:\n{message}")
 
     def _populate_tree(self, tree_dict):
+        """Rebuilds the entire tree structure from the provided dictionary."""
         # 1. Capture current expanded state and selection
         expanded_collabs = set()
         expanded_samples = set()
         current_path = ProjectManager.Session.get_path()
         current_path_str = str(current_path) if current_path else None
-
-        self.tree_view.setUpdatesEnabled(False)
 
         for i in range(self.tree_model.rowCount()):
             c_idx = self.tree_model.index(i, 0)
@@ -231,9 +232,9 @@ class SidebarWidget(QFrame):
                     if self.tree_view.isExpanded(s_idx):
                         expanded_samples.add((c_name, c_item.child(j).text()))
 
-        # 2. Block selection signals during rebuild to prevent Session.clear() flickers
+        # 2. Rebuild the model
         self.tree_view.selectionModel().blockSignals(True)
-
+        self.tree_view.setUpdatesEnabled(False)
         self.tree_model.clear()
         self.tree_model.setHorizontalHeaderLabels(["Research Hierarchy"])
         
@@ -259,11 +260,12 @@ class SidebarWidget(QFrame):
                 for exp in sorted(exps):
                     e_item = QStandardItem(exp)
                     e_item.setData("exp" if not is_config_dir else "config", Qt.ItemDataRole.UserRole + 1)
-                    # Store absolute path for easy access
+                    
                     if is_config_dir:
                         path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / f"{exp}.json"
                     else:
                         path = self.parent_window.base_dir / "SpectraLink_Data" / collab / sample / "JSON" / f"{exp}.json"
+                    
                     path_str = str(path)
                     e_item.setData(path_str, Qt.ItemDataRole.UserRole)
                     s_item.appendRow(e_item)
@@ -272,22 +274,12 @@ class SidebarWidget(QFrame):
                         target_idx = e_item.index()
 
         # 3. Restore signals and selection
-        self.tree_view.selectionModel().blockSignals(False)
         if target_idx:
-            # Restore selection and ensure experiment data is reloaded to reflect disk state
             self.tree_view.setCurrentIndex(target_idx)
             self.tree_view.scrollTo(target_idx)
-            path_str = self.tree_model.itemFromIndex(target_idx).data(Qt.ItemDataRole.UserRole)
-            if path_str:
-                ProjectManager.Session.load_experiment(Path(path_str))
-                self.experimentChanged.emit()
-        elif current_path_str:
-            # Selection was lost (experiment likely deleted), sync the session
-            ProjectManager.Session.clear()
-            self.experimentChanged.emit()
-            self.toggle_buttons()
 
         self.tree_view.setUpdatesEnabled(True)
+        self.tree_view.selectionModel().blockSignals(False)
 
 
     # ------------------------------------------------------------------ DRAG & DROP
@@ -394,6 +386,7 @@ class SidebarWidget(QFrame):
         if not index.isValid(): return
         
         item = self.tree_model.itemFromIndex(index)
+        if not item: return
         level = item.data(Qt.ItemDataRole.UserRole + 1)
 
         if level == "exp":
@@ -420,7 +413,8 @@ class SidebarWidget(QFrame):
         
         if index.isValid():
             item = self.tree_model.itemFromIndex(index)
-            is_exp = (item.data(Qt.ItemDataRole.UserRole + 1) == "exp")
+            if item:
+                is_exp = (item.data(Qt.ItemDataRole.UserRole + 1) == "exp")
         
         if not is_exp:
             # If we select a folder or nothing, clear the active experiment view
