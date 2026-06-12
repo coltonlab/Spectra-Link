@@ -57,12 +57,27 @@ class ABSTempProcessor(BaseProcessor):
 
     def _process_trace(self, wl, ab, settings, trace_idx):
         x, y = wl.copy(), ab.copy()
+
+        # 0. Wavelength Cutoff (nm)
+        w_min = settings.get("min_wavelength", 0.0)
+        w_max = settings.get("max_wavelength", 10000.0)
+        mask = (x >= w_min) & (x <= w_max)
+        x, y = x[mask], y[mask]
+
+        if len(x) == 0:
+            return x, y
+
         if settings.get("smooth_data"):
             if len(y) > self.SMOOTH_WINDOW:
                 y = savgol_filter(y, self.SMOOTH_WINDOW, self.SMOOTH_POLY)
         if settings.get("normalize_to_peak"):
             peak = np.max(np.abs(y))
             if peak > 0: y /= peak
+
+        # 4.5 Scaling Factor
+        scaling = settings.get("scaling_factor", 1.0)
+        y = y * scaling
+
         if settings.get("offset_traces"):
             y += trace_idx * self.OFFSET_STEP
         if settings.get("convert_to_ev"):
@@ -85,7 +100,10 @@ class ABSTempProcessor(BaseProcessor):
                 title = settings.get("plot_title", "")
                 if title and title != "False": ax.set_title(title, pad=15)
 
-            cmap = plt.get_cmap(settings.get("colormap_name", "viridis"))
+            colormap_name = settings.get("colormap_name", "viridis")
+            if settings.get("reverse_colormap", False):
+                colormap_name += "_r"
+            cmap = plt.get_cmap(colormap_name)
             traces = self._load_traces(json_data)
             num_traces = len(traces)
             if num_traces == 0:
@@ -94,7 +112,11 @@ class ABSTempProcessor(BaseProcessor):
 
 
             vals = [t.get("value", 0) for t in traces]
-            vmin, vmax = min(vals), max(vals)
+            max_val = max(vals) if vals else 0
+            # Anchor 0 to the 0.1 color position and Max data to the 0.9 position.
+            # This uses the high-contrast middle 80% of the colormap.
+            vmin = -max_val / 8.0 if max_val > 0 else -1.0
+            vmax = max_val * 1.125 if max_val > 0 else 1.0
             norm = plt.Normalize(vmin=vmin, vmax=vmax)
 
             # Zero Line & Vertical Lines
@@ -118,6 +140,8 @@ class ABSTempProcessor(BaseProcessor):
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):
                 sm = plt.cm.ScalarMappable(cmap=cmap, norm=norm)
                 cbar = figure.colorbar(sm, ax=ax, orientation='vertical', pad=0.02, fraction=0.04, aspect=30)
+                # Limit the colorbar display to the actual data range [0, Max]
+                cbar.ax.set_ylim(0, max_val)
                 cbar.set_label("Temp (K)", fontsize=9)
                 cbar.ax.tick_params(labelsize=8)
 

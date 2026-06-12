@@ -50,12 +50,27 @@ a = Analysis(
     noarchive=False,
 )
 
+# ----------------- 1. ADD THIS SPLASH BLOCK -----------------
+splash = None
+if sys.platform == 'win32':
+    splash = Splash(
+        os.path.join('Images', 'SpectraLink Splash Screen.png'), 
+        binaries=a.binaries,
+        datas=a.datas,
+        text=None,
+        minify_script=True,
+        always_on_top=True,
+    )
+# ------------------------------------------------------------
+
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
 
+exe_args = [pyz, a.scripts]
+if splash:
+    exe_args.extend([splash, splash.binaries])
+
 exe = EXE(
-    pyz,
-    a.scripts,
-    [],
+    *exe_args,
     exclude_binaries=True,
     icon=icon_file,
     name='SpectraLink',
@@ -76,6 +91,7 @@ coll = COLLECT(
     a.binaries,
     a.zipfiles,
     a.datas,
+    *([splash.binaries] if splash else []),
     strip=False,
     upx=True,
     upx_exclude=[],

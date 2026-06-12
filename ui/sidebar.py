@@ -549,12 +549,12 @@ class SidebarWidget(QFrame):
             old_path = None
             if level == "collab":
                 old_path = self.parent_window.base_dir / "SpectraLink_Data" / item.text()
-            elif level == "sample":
+            elif level == "sample" or level == "config_dir":
                 old_path = self.parent_window.base_dir / "SpectraLink_Data" / item.parent().text() / item.text()
-            elif level == "exp":
+            elif level == "exp" or level == "config":
                 old_path = Path(item.data(Qt.ItemDataRole.UserRole))
             
-            ProjectManager.rename_path(old_path, new_name if level != "exp" else f"{new_name}.json")
+            ProjectManager.rename_path(old_path, f"{new_name}.json" if level in ["exp", "config"] else new_name)
             self.update_root() # Full refresh
             logger.info(f"Renamed {level} from '{old_path.name}' to '{new_name}'")
 

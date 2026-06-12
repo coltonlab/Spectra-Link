@@ -306,6 +306,8 @@ class ComparisonTab(QWidget):
             QMessageBox.critical(self, "Path Error", f"Could not determine save location: {e}")
             return
 
+        data_root = self.parent_window.base_dir / "SpectraLink_Data"
+
         # 3. Ask user for a filename via text input
         name, ok = QInputDialog.getText(self, "Save Comparison Plot", "Enter a name for this comparison configuration:")
         if not ok or not name.strip():
@@ -318,16 +320,15 @@ class ComparisonTab(QWidget):
             serializable_grid_data = {
                 f"{r},{c}": [
                     {
-                        "path": path_str,
+                        "path": Path(path_str).relative_to(data_root).as_posix(),
                         "analysis_settings": (
                             # Try to get from cache first, otherwise hit disk
                             self._json_cache.get(path_str, {}).get("analysis_settings") or 
-                            (lambda p: (json.load(open(p, 'r')) if Path(p).exists() else {}).get("analysis_settings", {}))(path_str)
+                            (lambda p: (json.load(open(p, 'r', encoding='utf-8')) if Path(p).exists() else {}).get("analysis_settings", {}))(path_str)
                             if not self._json_cache.get(path_str) else 
                             self._json_cache[path_str].get("analysis_settings", {})
                         ) if path_str in self._json_cache else 
-                        # Safe one-liner to read disk if not in cache
-                        json.load(open(path_str, 'r')).get("analysis_settings", {}) if Path(path_str).exists() else {}
+                        json.load(open(path_str, 'r', encoding='utf-8')).get("analysis_settings", {}) if Path(path_str).exists() else {}
                     }
                     for path_str in paths_list
                 ]
@@ -341,7 +342,7 @@ class ComparisonTab(QWidget):
                 "settings": self.settings_panel.get_settings()
             }
             
-            with open(file_path, 'w') as f:
+            with open(file_path, 'w', encoding='utf-8') as f:
                 json.dump(config_data, f, indent=4)
             
             logger.info(f"Comparison configuration saved to: {file_path}")
@@ -355,8 +356,10 @@ class ComparisonTab(QWidget):
 
     def load_config_from_path(self, file_path: Path):
         """Loads a comparison configuration from a specific file path."""
+        data_root = self.parent_window.base_dir / "SpectraLink_Data"
+
         try:
-            with open(file_path, 'r') as f:
+            with open(file_path, 'r', encoding='utf-8') as f:
                 config_data = json.load(f)
             
             # Validate required keys
@@ -383,17 +386,18 @@ class ComparisonTab(QWidget):
             for (r, c), experiments_with_settings in self.grid_data.items():
                 paths_for_cell = []
                 for exp_data in experiments_with_settings:
-                    path_str = exp_data["path"]
+                    rel_path = exp_data["path"]
+                    path_obj = data_root / rel_path
+                    path_str = str(path_obj)
                     loaded_analysis_settings = exp_data["analysis_settings"]
-                    path_obj = Path(path_str)
                     
                     # Update the actual experiment JSON file on disk safely
                     if path_obj.exists():
                         try:
-                            with open(path_str, 'r') as f:
+                            with open(path_str, 'r', encoding='utf-8') as f:
                                 exp_json = json.load(f)
                             exp_json["analysis_settings"] = loaded_analysis_settings
-                            with open(path_str, 'w') as f:
+                            with open(path_str, 'w', encoding='utf-8') as f:
                                 json.dump(exp_json, f, indent=4)
                         except Exception as e:
                             logger.error(f"Failed to update settings for {path_str}: {e}")

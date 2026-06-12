@@ -715,6 +715,15 @@ class AnalysisSettingsPanel(QWidget):
                     )
                     chk.setToolTip(meta.get("tooltip", ""))
                     section.content_layout.addWidget(chk)
+                    
+                    # Inject a "Reverse Color Order" checkbox right under the colorbar toggle
+                    if key == "show_colorbar":
+                        rev_chk = QCheckBox("Reverse Color Order")
+                        rev_chk.setChecked(saved_settings.get("reverse_colormap", False))
+                        rev_chk.toggled.connect(
+                            lambda state: self.settingChanged.emit("reverse_colormap", state)
+                        )
+                        section.content_layout.addWidget(rev_chk)
 
             # Insert before the trailing stretch
             self.container_layout.insertWidget(
