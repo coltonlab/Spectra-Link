@@ -182,18 +182,22 @@ class EAProcessor(BaseProcessor):
                 ax.axhline(0, color='Black', linewidth=0.8, linestyle='solid', alpha=0.6, zorder=0)
 
             # Add vertical reference lines if configured
-            v_lines = settings.get("vertical_lines") or []
-            for line in (v_lines if isinstance(v_lines, list) else []):
-                vx = line.get("x")
-                v_lbl = line.get("label", "")
-                show_lgnd = line.get("show_legend", True)
-                if vx is not None and vx > 0:
-                    # Apply unit conversion if necessary (input is now assumed eV)
-                    plot_x = vx if use_ev else 1240.0 / vx
-                    ax.axvline(
-                        plot_x, color='black', linestyle='--', 
-                        linewidth=1.0, alpha=0.4, label=v_lbl if show_lgnd else None, zorder=1
-                    )
+            if settings.get("show_vertical_lines", True) and str(settings.get("show_vertical_lines", True)).lower() != 'false':
+                v_lines = settings.get("vertical_lines") or []
+                for line in (v_lines if isinstance(v_lines, list) else []):
+                    # Only plot if the individual line's toggle is active
+                    if not line.get("show_legend", True):
+                        continue
+                        
+                    vx = line.get("x")
+                    v_lbl = line.get("label", "")
+                    if vx is not None and vx > 0:
+                        # Apply unit conversion if necessary (input is now assumed eV)
+                        plot_x = vx if use_ev else 1240.0 / vx
+                        ax.axvline(
+                            plot_x, color='black', linestyle='--', 
+                            linewidth=1.0, alpha=0.4, label=v_lbl, zorder=1
+                        )
 
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(

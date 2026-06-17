@@ -123,13 +123,17 @@ class ABSTempProcessor(BaseProcessor):
             if settings.get("show_zero_line"):
                 ax.axhline(0, color='Black', linewidth=0.8, alpha=0.6, zorder=0)
             
-            v_lines = settings.get("vertical_lines") or []
-            for line in (v_lines if isinstance(v_lines, list) else []):
-                vx = line.get("x")
-                if vx and vx > 0:
-                    plot_x = vx if use_ev else 1240.0 / vx
-                    ax.axvline(plot_x, color='black', linestyle='--', linewidth=1.0, alpha=0.4, 
-                               label=line.get("label", "") if line.get("show_legend", True) else None)
+            if settings.get("show_vertical_lines", True) and str(settings.get("show_vertical_lines", True)).lower() != 'false':
+                v_lines = settings.get("vertical_lines") or []
+                for line in (v_lines if isinstance(v_lines, list) else []):
+                    # If individual line is toggled off in the list, don't plot it
+                    if not line.get("show_legend", True):
+                        continue
+                    vx = line.get("x")
+                    if vx and vx > 0:
+                        plot_x = vx if use_ev else 1240.0 / vx
+                        ax.axvline(plot_x, color='black', linestyle='--', linewidth=1.0, alpha=0.4, 
+                                   label=line.get("label", ""))
 
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, idx)
