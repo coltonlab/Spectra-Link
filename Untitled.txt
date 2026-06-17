@@ -1,0 +1,77 @@
+
+### **Prompt 0: The Context Primer**
+
+*Feed this to the AI first, or put it in the "System Prompt" or "Project Context" section of your AI tool. Do not ask it to write code yet.*
+
+> **Project Context:**
+> I am building "Spectra-Link", a PyQt6 desktop application for visualizing and analyzing spectroscopic data. We are building a "Modeling" system using a Micro-Frontend / Pluggable Architecture.
+> Instead of a rigid UI, the main application's "Modeling Tab" will act as a completely blank layout stage. Every experimental model we build (like a K-Analysis or Gaussian Fit) will be its own completely independent PyQt6 widget (a "Master Dashboard"). These Master Dashboards will contain their own specific arrangement of `pyqtgraph` plots, control sliders, and text outputs using nested layouts.
+> The main app will dynamically mount and unmount these Master Dashboards into the Modeling Tab based on user selection. Furthermore, every Master Dashboard must be able to run as a standalone application using an `if __name__ == "__main__":` block for rapid testing outside the main app.
+> Reply "Understood" if you grasp the architecture. Do not write any code yet.
+
+---
+
+### **Prompt 1: The Base Handshake Interface**
+
+*This ensures all future models share a strict set of rules so the main app can interact with them uniformly.*
+
+> **Step 1: Create the Base Interface**
+> Please write a Python module containing an abstract base class called `BaseModelingDashboard` that inherits from `PyQt6.QtWidgets.QWidget`.
+> This class needs to enforce a strict "handshake" protocol for all future models. It must define the following abstract methods:
+> 1. `set_active_data(self, x_data, y_data, metadata_dict)`: A method the main app will call to pass raw numpy arrays and a JSON dictionary to the widget.
+> 2. `build_ui(self)`: A method where child classes will set up their specific nested layouts, `pyqtgraph` PlotWidgets, and control panels.
+> 3. `shutdown(self)`: A cleanup method the main app will call right before destroying the widget to clear memory, stop background threads, or unbind signals.
+> 
+> 
+> Please ensure the code is well-documented and strictly uses PyQt6.
+
+---
+
+### **Prompt 2: The Standalone Dummy Dashboard**
+
+*This builds your testable playground.*
+
+> **Step 2: Build the Dummy Model**
+> Now, create a new file called `dummy_dashboard.py`. In it, create a class called `DummyDashboard` that inherits from the `BaseModelingDashboard` we just made.
+> **Layout Requirements (`build_ui`):**
+> Use a horizontal layout (`QHBoxLayout`) as the main wrapper.
+> * **Left Column (Plots & Text):** A `QVBoxLayout` containing two `pyqtgraph` PlotWidgets stacked vertically, with a `QTextEdit` at the bottom for displaying fake fit parameters.
+> * **Right Column (Controls):** A narrower `QVBoxLayout` containing a few dummy `QSlider` and `QPushButton` widgets.
+> 
+> 
+> **Data Handling (`set_active_data`):**
+> When this method is called, it should plot the raw data on the top plot, apply a simple math operation (like multiplying the Y data by a slider value) to simulate a "fit", and plot that result on the bottom plot.
+> **Testing Block:**
+> At the bottom of the file, write an `if __name__ == "__main__":` block that initializes a `QApplication`, creates a generic `QMainWindow`, mounts the `DummyDashboard` as the central widget, generates some fake noisy numpy sine-wave data, passes it to `set_active_data`, and runs the application loop.
+
+---
+
+### **Prompt 3: The Main App Router (The Blank Stage)**
+
+*This prepares your main application to accept the independent modules.*
+
+> **Step 3: Modify the Main Modeling Tab**
+> Now we need to update the main application's `ModelingTab` widget.
+> Currently, the tab might have a static layout. Please rewrite the `ModelingTab` class to act as a dynamic router. It should have an empty layout (e.g., `QVBoxLayout`) that acts as a stage.
+> Add a method called `load_modeling_dashboard(self, dashboard_class, x_data, y_data, metadata)`. This method must do the following in order:
+> 1. **Eviction:** Check if there is already a dashboard widget mounted in the layout. If there is, call its `.shutdown()` method, remove it from the layout, and safely delete it using `deleteLater()` to prevent memory leaks.
+> 2. **Injection:** Instantiate the new `dashboard_class`.
+> 3. **Data Hand-off:** Call `.set_active_data(x_data, y_data, metadata)` on the newly instantiated widget.
+> 4. **Mounting:** Add the new widget to the tab's main layout.
+> 
+> 
+
+---
+
+### **Prompt 4: Tying it Together**
+
+*This connects your file tree/Comparison Basket to the newly built router.*
+
+> **Step 4: The Trigger Mechanism**
+> Finally, show me how to wire this up in the main application loop.
+> Write a configuration dictionary (e.g., in a settings file or the main window class) that maps a string name of an experiment (like "Dummy Analysis") to the actual `DummyDashboard` class object.
+> Then, write a mock slot function called `on_experiment_selected(experiment_name, x, y, metadata)` that simulates a user clicking an item in the sidebar file tree. This function should look up the correct dashboard class from the dictionary and pass it, along with the data, to the `ModelingTab.load_modeling_dashboard()` method we built in Step 3.
+
+---
+
+By using these four prompts sequentially, your AI assistant will build the robust, plug-and-play foundation without getting overwhelmed by trying to write the UI, the math, and the application routing all at the exact same time.

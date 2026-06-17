@@ -11,11 +11,13 @@ from ui.theme import get_theme, apply_palette_to_app
 from ui.discovery_tab import DiscoveryTab
 from ui.analysis_tab import AnalysisTab
 from ui.comparison_tab import ComparisonTab
+from ui.modeling_tab import ModelingTab # Import ModelingTab from its new location
 from ui.stylesheets import build_stylesheet
 from utils.app_logger import setup_logging, logger
 from ui.sidebar import SidebarWidget
 
 # ──────────────────────────────────────────────────────────────────────────────
+import numpy as np # Added for mock data generation
 def resource_path(relative_path):
     """ Get absolute path to resource, works for dev and for PyInstaller """
     try:
@@ -57,6 +59,7 @@ class SpectraLink(QMainWindow):
         self.resize(1100, 720)
         self.base_dir = get_base_data_dir()
         self.dark_mode = True
+
         self.init_ui()
 
         # Set Window Icon using platform-specific format from the bundled Images folder
@@ -91,6 +94,9 @@ class SpectraLink(QMainWindow):
         self.analysis_tab = AnalysisTab(self)
         self.tabs.addTab(self.analysis_tab, "Interactive Analysis")
 
+        self.modeling_tab = ModelingTab(self)
+        self.tabs.addTab(self.modeling_tab, "Modeling")
+
         self.comparison_tab = ComparisonTab(self)
         self.tabs.addTab(self.comparison_tab, "Comparison Basket")
         content_layout.addWidget(self.tabs)
@@ -115,6 +121,9 @@ class SpectraLink(QMainWindow):
         
         # Always notify AnalysisTab to rebuild or clear stale states
         self.analysis_tab.rebuild_settings_header(tech)
+
+        # Delegate modeling logic to the tab itself
+        self.modeling_tab.refresh_from_session()
 
     # ──────────────────────────────────────────────────────────────────────────
     #  Theme
@@ -144,6 +153,7 @@ class SpectraLink(QMainWindow):
         # 3. Update the Sidebar (includes ToggleSwitch colors)
         self.sidebar.apply_theme(T, self.dark_mode)
         self.discovery_tab.apply_theme(self.dark_mode)
+        self.modeling_tab.apply_theme(self.dark_mode)
 
 
 # ──────────────────────────────────────────────────────────────────────────────

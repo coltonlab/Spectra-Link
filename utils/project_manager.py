@@ -166,3 +166,7 @@ class ProjectManager:
         except OSError as e: # Directory not empty or doesn't exist
             logger.error(f"Error deleting folder {path}: {e}")
             return False
+
+
+# Export the nested Session class at module level for convenient imports
+Session = ProjectManager.Session
