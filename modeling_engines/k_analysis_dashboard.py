@@ -3,9 +3,11 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QApplication, QMainWindow, QPushButton, QTextEdit, QFrame
+    QApplication, QMainWindow, QPushButton, QTextEdit, QFrame, QListWidget, QListWidgetItem
 )
 from PyQt6.QtCore import Qt
+
+
 
 # Local Imports
 try:
