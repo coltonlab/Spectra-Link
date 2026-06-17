@@ -653,6 +653,15 @@ class AnalysisSettingsPanel(QWidget):
                         lambda val, k=key: self.settingChanged.emit(k, val)
                     )
                     section.content_layout.addWidget(row)
+
+                    # Inject "Dashed Line" checkbox for color-related settings
+                    if key in ["trace_color", "colormap_name"]:
+                        dash_chk = QCheckBox("Dashed Line")
+                        dash_chk.setChecked(saved_settings.get("dashed_line", False))
+                        dash_chk.toggled.connect(
+                            lambda state: self.settingChanged.emit("dashed_line", state)
+                        )
+                        section.content_layout.addWidget(dash_chk)
                 elif w_type == "list_of_dicts":
                     v_widget = _VerticalLinesWidget(saved_settings.get(key, []), C)
                     v_widget.changed.connect(lambda val, k=key: self.settingChanged.emit(k, val))
@@ -709,9 +718,11 @@ class AnalysisSettingsPanel(QWidget):
                     section.content_layout.addWidget(row)
                 else:
                     chk = QCheckBox(label_text)
-                    chk.setChecked(saved_settings.get(key, False))
+                    # Use metadata default if setting doesn't exist, otherwise default to False (nm)
+                    chk.setChecked(saved_settings.get(key, meta.get("default", False)))
+                    
                     chk.toggled.connect(
-                        lambda state, k=key: self.settingChanged.emit(k, state)
+                        lambda checked, k=key: self.settingChanged.emit(k, checked)
                     )
                     chk.setToolTip(meta.get("tooltip", ""))
                     section.content_layout.addWidget(chk)

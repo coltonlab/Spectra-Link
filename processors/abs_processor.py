@@ -140,12 +140,6 @@ class ABSProcessor(BaseProcessor):
             settings = self.get_settings(json_data).copy() # Copy to avoid mutating original
             json_path = path or self.data_path
 
-            # Global Overrides (Option 1)
-            if kwargs.get("force_unit") == "eV":
-                settings["convert_to_ev"] = True
-            elif kwargs.get("force_unit") == "nm":
-                settings["convert_to_ev"] = False
-
             if ax is None:
                 ax = figure.add_subplot(111)
 
@@ -183,9 +177,10 @@ class ABSProcessor(BaseProcessor):
             x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, 0)
 
             lw = settings.get("line_width", kwargs.get("line_width", 1.5))
+            ls = "--" if settings.get("dashed_line", False) else "-"
             # Use color from analysis settings if defined, else default blue
             color = settings.get("trace_color", PRIMARY_TRACE_COLOR)
-            ax.plot(x, y, color=color, linewidth=lw, label=trace["label"])
+            ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls)
 
             # Axis labels
             if use_ev:

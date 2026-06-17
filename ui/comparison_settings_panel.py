@@ -26,7 +26,6 @@ class ComparisonSettingsPanel(QWidget):
 
         # Default Settings State
         self.settings = {
-            "force_unit": "None (Use Saved)", # Options 1
             "sync_y": False,
             "hspace": 0.1,                    # Options 2
             "wspace": 0.1,
@@ -96,12 +95,6 @@ class ComparisonSettingsPanel(QWidget):
         
         # 1. Axis & Units
         s1 = CollapsibleSection("Global Axis Control", is_dark)
-        self.unit_combo = QComboBox()
-        self.unit_combo.addItems(["None (Use Saved)", "Wavelength (nm)", "Photon Energy (eV)"])
-        self.unit_combo.currentTextChanged.connect(lambda v: self._upd("force_unit", v))
-        s1.content_layout.addWidget(QLabel("Unit Override:"))
-        s1.content_layout.addWidget(self.unit_combo)
-        
         self.chk_sync_y = QCheckBox("Sync Y-Axis Scale")
         self.chk_sync_y.toggled.connect(lambda v: self._upd("sync_y", v))
         s1.content_layout.addWidget(self.chk_sync_y)
@@ -158,7 +151,6 @@ class ComparisonSettingsPanel(QWidget):
         self.settings.update(new_settings)
         
         # Update UI widgets without emitting signals immediately
-        self.unit_combo.setCurrentText(self.settings.get("force_unit", "None (Use Saved)"))
         self.chk_sync_y.setChecked(self.settings.get("sync_y", False))
         self.spin_h.setValue(self.settings.get("hspace", 0.1))
         self.chk_outer.setChecked(self.settings.get("label_outer", True))

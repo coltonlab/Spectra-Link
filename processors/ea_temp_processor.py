@@ -150,10 +150,6 @@ class EATempProcessor(BaseProcessor):
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data).copy()
             
-            # Global Overrides
-            if kwargs.get("force_unit") == "eV": settings["convert_to_ev"] = True
-            elif kwargs.get("force_unit") == "nm": settings["convert_to_ev"] = False
-            
             use_ev = settings.get("convert_to_ev", False)
             lw = settings.get("line_width", kwargs.get("line_width", 1.5))
             ax = ax or figure.add_subplot(111)
@@ -205,10 +201,11 @@ class EATempProcessor(BaseProcessor):
             ax_abs = None
             show_abs = settings.get("overlay_absorption", False)
 
+            ls = "--" if settings.get("dashed_line", False) else "-"
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(trace["wavelengths"], trace["ea"], settings, idx)
                 color = cmap(norm(trace.get("value", 0))) if vmin != vmax else cmap(idx/len(traces) if len(traces) > 1 else 0.5)
-                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"])
+                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls)
 
                 if show_abs and "absorption" in trace:
                     if ax_abs is None:
