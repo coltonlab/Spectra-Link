@@ -202,10 +202,11 @@ class EATempProcessor(BaseProcessor):
             show_abs = settings.get("overlay_absorption", False)
 
             ls = "--" if settings.get("dashed_line", False) else "-"
+            alpha = settings.get("trace_alpha", 1.0)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(trace["wavelengths"], trace["ea"], settings, idx)
                 color = cmap(norm(trace.get("value", 0))) if vmin != vmax else cmap(idx/len(traces) if len(traces) > 1 else 0.5)
-                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls)
+                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls, alpha=alpha)
 
                 if show_abs and "absorption" in trace:
                     if ax_abs is None:

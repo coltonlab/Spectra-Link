@@ -662,6 +662,18 @@ class AnalysisSettingsPanel(QWidget):
                             lambda state: self.settingChanged.emit("dashed_line", state)
                         )
                         section.content_layout.addWidget(dash_chk)
+
+                        # Inject alpha slider
+                        alpha_row = _SliderSpinRow("Trace α", C, 
+                                                   min_v=0.0, 
+                                                   max_v=1.0,
+                                                   step=0.05,
+                                                   decimals=2)
+                        alpha_row.setValue(float(saved_settings.get("trace_alpha", 1.0)))
+                        alpha_row.valueChanged.connect(
+                            lambda val: self.settingChanged.emit("trace_alpha", val)
+                        )
+                        section.content_layout.addWidget(alpha_row)
                 elif w_type == "list_of_dicts":
                     v_widget = _VerticalLinesWidget(saved_settings.get(key, []), C)
                     v_widget.changed.connect(lambda val, k=key: self.settingChanged.emit(k, val))

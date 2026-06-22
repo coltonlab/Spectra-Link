@@ -194,6 +194,7 @@ class EAProcessor(BaseProcessor):
                         )
 
             ls = "--" if settings.get("dashed_line", False) else "-"
+            alpha = settings.get("trace_alpha", 1.0)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(
                     trace["wavelengths"],
@@ -208,7 +209,7 @@ class EAProcessor(BaseProcessor):
                 else:
                     color = cmap(idx / (num_traces - 1) if num_traces > 1 else 0.5)
 
-                ax.plot(x, y, color=color, linewidth=lw, linestyle=ls)
+                ax.plot(x, y, color=color, linewidth=lw, linestyle=ls, alpha=alpha)
 
             # Add slender vertical colorbar on the right if enabled
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):

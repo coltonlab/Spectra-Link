@@ -111,6 +111,7 @@ class SpectraLink(QMainWindow):
 
         # ── Signals ───────────────────────────────────────────────────────────
         self.sidebar.experimentChanged.connect(self._on_exp_changed)
+        self.tabs.currentChanged.connect(self._on_tab_changed)
 
         self.sidebar.update_root()
         self.apply_theme()
@@ -124,6 +125,21 @@ class SpectraLink(QMainWindow):
 
         # Delegate modeling logic to the tab itself
         self.modeling_tab.refresh_from_session()
+        
+        # If the analysis tab is already visible, run analysis for the new experiment
+        if self.tabs.currentWidget() == self.analysis_tab:
+            self.analysis_tab.execute_plot()
+
+    def _on_tab_changed(self, index):
+        """
+        When the user switches to the Interactive Analysis tab, automatically
+        run the analysis for the currently selected experiment.
+        """
+        current_widget = self.tabs.widget(index)
+        if current_widget == self.analysis_tab:
+            # Check if an experiment is loaded before trying to run
+            if self.discovery_tab._current_json_path:
+                self.analysis_tab.execute_plot()
 
     # ──────────────────────────────────────────────────────────────────────────
     #  Theme

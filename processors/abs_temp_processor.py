@@ -133,10 +133,11 @@ class ABSTempProcessor(BaseProcessor):
                                    label=line.get("label", ""))
 
             ls = "--" if settings.get("dashed_line", False) else "-"
+            alpha = settings.get("trace_alpha", 1.0)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, idx)
                 color = cmap(norm(trace.get("value", 0))) if vmin != vmax else cmap(idx/num_traces if num_traces > 1 else 0.5)
-                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls)
+                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls, alpha=alpha)
 
             # Colorbar
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):

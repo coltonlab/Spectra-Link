@@ -360,23 +360,24 @@ class DiscoveryTab(QWidget):
         self.table.blockSignals(False)
 
         if technique is None or technique not in TECHNIQUE_CONFIG:
-            cols = ["Filename", "Scan Type", "Notes", "Full Path"]
+            cols = ["Date", "Filename", "Scan Type", "Notes", "Full Path"]
             self.table.setColumnCount(len(cols))
             for i in range(self.table.columnCount()):
                 self.table.setColumnHidden(i, False)
             self.table.setHorizontalHeaderLabels(cols)
             hh = self.table.horizontalHeader()
-            hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Filename
-            hh.setSectionResizeMode(1, QHeaderView.ResizeMode.Fixed)          # Scan Type
-            self.table.setColumnWidth(1, 120)
-            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)          # Notes
+            hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Date
+            hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents) # Filename
+            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Fixed)          # Scan Type
+            self.table.setColumnWidth(2, 120)
+            hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)          # Notes
             self.table.setColumnHidden(len(cols)-1, True) # Hide Path
             return
 
         cfg         = TECHNIQUE_CONFIG[technique]
         local_param = cfg.get("local_param")
         has_local   = local_param is not None
-        cols        = ["Filename", "Scan Type"]
+        cols        = ["Date", "Filename", "Scan Type"]
         if has_local:
             cols.append(local_param["label"])
         cols.append("Notes")
@@ -387,13 +388,14 @@ class DiscoveryTab(QWidget):
             self.table.setColumnHidden(i, False)
         self.table.setHorizontalHeaderLabels(cols)
         hh = self.table.horizontalHeader()
-        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Filename
-        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)          # Scan Type
+        hh.setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents) # Date
+        hh.setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents) # Filename
+        hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents) # Scan Type
         if has_local:
-            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents) # Local
-            hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)          # Notes
+            hh.setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents) # Local
+            hh.setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)          # Notes
         else:
-            hh.setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)          # Notes
+            hh.setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)          # Notes
         self.table.setColumnHidden(len(cols)-1, True) # Hide Path
 
     # ------------------------------------------------------------------ REFRESH TARGET
@@ -472,24 +474,30 @@ class DiscoveryTab(QWidget):
             for col_idx in range(self.table.columnCount()):
                 self.table.setItem(row, col_idx, QTableWidgetItem(""))
 
-            # 0: Filename
+            # 0: Date
+            date_folder = Path(fpath).parent.name
+            item_date = QTableWidgetItem(date_folder)
+            item_date.setFlags(item_date.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            self.table.setItem(row, 0, item_date)
+
+            # 1: Filename
             item_name = QTableWidgetItem(fname)
             item_name.setFlags(item_name.flags() & ~Qt.ItemFlag.ItemIsEditable)
-            self.table.setItem(row, 0, item_name)
+            self.table.setItem(row, 1, item_name)
 
-            # 1: Scan Type
+            # 2: Scan Type
             combo = self._make_scan_combo(scan_types, row)
             combo.setCurrentText("None")
-            self.table.setCellWidget(row, 1, combo)
+            self.table.setCellWidget(row, 2, combo)
 
             # Local / Notes / Path
-            notes_col = 2
+            notes_col = 3
             if has_local:
                 spin = self._make_local_spin(local_param, value=local_param.get("default", 0))
                 spin.setEnabled(False)
                 spin.setStyleSheet(self._disabled_spin_style())
-                self.table.setCellWidget(row, 2, spin)
-                notes_col = 3
+                self.table.setCellWidget(row, 3, spin)
+                notes_col = 4
             
             self.table.setCellWidget(row, notes_col, self._make_notes_edit(""))
 
@@ -594,7 +602,7 @@ class DiscoveryTab(QWidget):
         if is_singleton:
             for r in range(self.table.rowCount()):
                 if r != row:
-                    combo = self.table.cellWidget(r, 1)
+                    combo = self.table.cellWidget(r, 2)
                     if combo and combo.currentText() == text:
                         combo.setCurrentText("None")
                         self._update_row_color(r, "None")
@@ -603,7 +611,7 @@ class DiscoveryTab(QWidget):
 
         # Enable/disable local-param spinbox based on active_scan_types
         if local_param:
-            spin = self.table.cellWidget(row, 2)
+            spin = self.table.cellWidget(row, 3)
             if isinstance(spin, QDoubleSpinBox):
                 active = local_param.get("active_scan_types", [])
                 if text in active:

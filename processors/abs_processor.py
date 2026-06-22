@@ -180,7 +180,8 @@ class ABSProcessor(BaseProcessor):
             ls = "--" if settings.get("dashed_line", False) else "-"
             # Use color from analysis settings if defined, else default blue
             color = settings.get("trace_color", PRIMARY_TRACE_COLOR)
-            ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls)
+            alpha = settings.get("trace_alpha", 1.0)
+            ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls, alpha=alpha)
 
             # Axis labels
             if use_ev:

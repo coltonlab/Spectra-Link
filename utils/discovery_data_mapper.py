@@ -77,25 +77,31 @@ class DiscoveryDataMapper:
             for c in range(tab.table.columnCount()):
                 tab.table.setItem(row, c, QTableWidgetItem(""))
 
-            f_item = QTableWidgetItem(Path(rel_path).name)
+            # Date
+            date_item = QTableWidgetItem(Path(rel_path).parent.name)
+            date_item.setFlags(date_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
+            tab.table.setItem(row, 0, date_item)
+
+            # Filename
+            f_item = QTableWidgetItem(Path(rel_path).stem)
             f_item.setFlags(f_item.flags() & ~Qt.ItemFlag.ItemIsEditable)
             if not full_p.exists():
                 T = get_theme(tab.parent_window.dark_mode)
                 f_item.setForeground(QBrush(QColor(T.missing_file_fg)))
-            tab.table.setItem(row, 0, f_item)
+            tab.table.setItem(row, 1, f_item)
 
             cb = tab._make_scan_combo(cfg.get("scan_types", ["None"]), row)
             cb.setCurrentText(scan_type)
-            tab.table.setCellWidget(row, 1, cb)
+            tab.table.setCellWidget(row, 2, cb)
 
-            note_col = 2
+            note_col = 3
             if has_local:
                 spin = tab._make_local_spin(local_param, value=local_val if local_val is not None else local_param.get("default", 0))
                 if scan_type not in active_types:
                     spin.setEnabled(False)
                     spin.setStyleSheet(tab._disabled_spin_style())
-                tab.table.setCellWidget(row, 2, spin)
-                note_col = 3
+                tab.table.setCellWidget(row, 3, spin)
+                note_col = 4
             
             tab.table.setCellWidget(row, note_col, tab._make_notes_edit(notes))
             tab.table.setItem(row, tab.table.columnCount()-1, QTableWidgetItem(str(full_p)))
@@ -127,10 +133,10 @@ class DiscoveryDataMapper:
         
         active_types = local_param.get("active_scan_types", []) if has_local else []
         path_col = tab.table.columnCount() - 1
-        loc_col, note_col = (2, 3) if has_local else (None, 2)
+        loc_col, note_col = (3, 4) if has_local else (None, 3)
 
         for r in range(tab.table.rowCount()):
-            cb, nt, pi = tab.table.cellWidget(r, 1), tab.table.cellWidget(r, note_col), tab.table.item(r, path_col)
+            cb, nt, pi = tab.table.cellWidget(r, 2), tab.table.cellWidget(r, note_col), tab.table.item(r, path_col)
             if not cb or not nt or not pi: continue
 
             st, notes, full_p = cb.currentText(), nt.toPlainText(), pi.text()
