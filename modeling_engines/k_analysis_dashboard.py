@@ -34,6 +34,7 @@ class KAnalysisDashboard(BaseModelingDashboard):
         # Capture the window reference before we are reparented by a layout
         self.parent_window = getattr(parent, 'parent_window', None)
 
+        self._is_dark = True
         self.x_data = None
         self.y_data = None
         self.metadata = {}
@@ -145,10 +146,11 @@ class KAnalysisDashboard(BaseModelingDashboard):
         processor = get_processor(self.metadata.get("core", {}).get("technique"), self.parent_window)
         settings = self.metadata.get("analysis_settings", {})
 
+        fg_color = '#ffffff' if getattr(self, '_is_dark', True) else '#333333'
         if self.current_view == "spectrum":
-            self.plot.setTitle("EA Voltage Series Spectrum")
-            self.plot.setLabel('left', 'EA Signal', units='mOD')
-            self.plot.setLabel('bottom', 'Energy', units='eV')
+            self.plot.setTitle("EA Voltage Series Spectrum", color=fg_color)
+            self.plot.setLabel('left', 'EA Signal', units='mOD', color=fg_color)
+            self.plot.setLabel('bottom', 'Energy', units='eV', color=fg_color)
             self.plot.setLogMode(x=False, y=False)
             self.plot.showGrid(x=True, y=True)
             
@@ -167,7 +169,7 @@ class KAnalysisDashboard(BaseModelingDashboard):
             for i, raw_trace in enumerate(self.traces):
                 x, y = processor._process_trace(raw_trace['wavelengths'], raw_trace['ea'], settings, i)
                 color = pg.intColor(i, len(self.traces))
-                self.plot.plot(x, y, pen=color, name=raw_trace['label'])
+                self.plot.plot(x, y, pen=pg.mkPen(color, width=2), name=raw_trace['label'])
                 
                 # Plot Gaussian fits if toggled on
                 if self.chk_show_fits.isChecked():
@@ -185,9 +187,9 @@ class KAnalysisDashboard(BaseModelingDashboard):
                                 fit_pen = pg.mkPen(color, width=2, style=Qt.PenStyle.DashLine)
                                 self.plot.plot(x_smooth, y_fit, pen=fit_pen)
         else:
-            self.plot.setTitle("Peak Amplitude vs Voltage (Log-Log)")
-            self.plot.setLabel('left', 'Peak Amplitude (mOD)')
-            self.plot.setLabel('bottom', 'Voltage (V)')
+            self.plot.setTitle("Peak Amplitude vs Voltage (Log-Log)", color=fg_color)
+            self.plot.setLabel('left', 'Peak Amplitude (mOD)', color=fg_color)
+            self.plot.setLabel('bottom', 'Voltage (V)', color=fg_color)
             self.plot.setLogMode(x=True, y=True)
             self.plot.showGrid(x=True, y=True)
             
@@ -365,8 +367,9 @@ class KAnalysisDashboard(BaseModelingDashboard):
         
         color_idx = len(self.regions) % 10
         region_color = pg.intColor(color_idx, 10)
-        new_region.setBrush(pg.mkBrush(region_color.lighter(150)))
-        self._set_region_pen(new_region, pg.mkPen(region_color, width=2))
+        new_region.setBrush(pg.mkBrush(QColor(0, 0, 0, 0)))
+        new_region.setHoverBrush(pg.mkBrush(QColor(0, 0, 255, 30)))
+        self._set_region_pen(new_region, pg.mkPen(region_color, width=4))
 
         self.plot.addItem(new_region)
         self.regions.append(new_region)
@@ -437,12 +440,12 @@ class KAnalysisDashboard(BaseModelingDashboard):
         for i, region in enumerate(self.regions):
             if i == row:
                 region.setZValue(11) # Bring to front
-                self._set_region_pen(region, pg.mkPen('y', width=3)) # Highlight
+                self._set_region_pen(region, pg.mkPen('y', width=5)) # Highlight
             else:
                 region.setZValue(10)
                 color_idx = i % 10
                 region_color = pg.intColor(color_idx, 10)
-                self._set_region_pen(region, pg.mkPen(region_color, width=2))
+                self._set_region_pen(region, pg.mkPen(region_color, width=4))
         self.btn_remove_range.setEnabled(row >= 0)
 
     def perform_k_analysis(self, region_item=None):
@@ -522,14 +525,25 @@ class KAnalysisDashboard(BaseModelingDashboard):
         logger.info("KAnalysisDashboard shutting down.")
 
     def apply_theme(self, is_dark: bool):
+        self._is_dark = is_dark
         bg = 'k' if is_dark else 'w'
+        fg = 'w' if is_dark else '#333333'
         self.plot.setBackground(bg)
+        
+        axis_pen = pg.mkPen(fg)
+        self.plot.getAxis('bottom').setPen(axis_pen)
+        self.plot.getAxis('bottom').setTextPen(axis_pen)
+        self.plot.getAxis('left').setPen(axis_pen)
+        self.plot.getAxis('left').setTextPen(axis_pen)
+
         # Update region colors if they exist
         for i, region in enumerate(self.regions):
             color_idx = i % 10
             region_color = pg.intColor(color_idx, 10)
-            region.setBrush(pg.mkBrush(region_color.lighter(150)))
-            self._set_region_pen(region, pg.mkPen(region_color, width=2))
+            region.setBrush(pg.mkBrush(QColor(0, 0, 0, 0)))
+            region.setHoverBrush(pg.mkBrush(QColor(0, 0, 255, 30)))
+            self._set_region_pen(region, pg.mkPen(region_color, width=4))
+        self.update_view()
 
 if __name__ == "__main__":
     app = QApplication(sys.argv)
