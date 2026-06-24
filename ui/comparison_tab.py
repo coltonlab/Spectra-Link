@@ -22,7 +22,7 @@ class ComparisonTab(QWidget):
         super().__init__()
         self.parent_window = parent_window
         
-        # Internal Data Structure: (row, col) -> [list of absolute paths to .json]
+        # Internal Data Structure: (row, col) -> [{"path": path, "axis": 1}, ...]
         # This mapping allows for multiple experiments (overlays) in a single subplot cell.
         self.grid_data = {}
         self._axes_map = {}      # Maps Matplotlib Axes -> (row, col)
@@ -113,8 +113,8 @@ class ComparisonTab(QWidget):
             del self._json_cache[path_str]
         
         # Only trigger a full rebuild if this experiment is actually currently in our grid
-        for paths in self.grid_data.values():
-            if path_str in paths:
+        for entries in self.grid_data.values():
+            if any(e["path"] == path_str for e in entries):
                 self.rebuild_plots()
                 break
 
@@ -138,28 +138,41 @@ class ComparisonTab(QWidget):
         if event.button != 3 or event.inaxes is None:
             return
             
-        # Identify the grid coordinate from the clicked axis
-        target_rc = None
-        for rc, ax in self._axes_map.items():
-            if ax == event.inaxes:
-                target_rc = rc
-                break
-        
+        target_rc = self._axes_map.get(event.inaxes)
         if target_rc:
             self._show_context_menu(target_rc, event)
 
     def _show_context_menu(self, rc, event):
         """Shows a menu to manage experiments in a specific cell."""
-        paths = self.grid_data.get(rc, [])
-        if not paths:
+        entries = self.grid_data.get(rc, [])
+        if not entries:
             return
 
         menu = QMenu(self)
         menu.addSection(f"Cell {rc[0]+1}, {rc[1]+1}")
 
+        # --- Configure Axis Submenu ---
+        config_axis_menu = menu.addMenu("Configure Axis")
+        for i, entry in enumerate(entries):
+            path_str = entry["path"]
+            path_obj = Path(path_str)
+            display_name = f"{path_obj.parent.parent.name} / {path_obj.stem}"
+            exp_axis_menu = config_axis_menu.addMenu(display_name)
+            
+            ax1_act = exp_axis_menu.addAction("Axis 1 (Left)")
+            ax1_act.setCheckable(True)
+            ax1_act.setChecked(entry.get("axis", 1) == 1)
+            ax1_act.triggered.connect(lambda _, idx=i: self._set_experiment_axis(rc, idx, 1))
+            
+            ax2_act = exp_axis_menu.addAction("Axis 2 (Right)")
+            ax2_act.setCheckable(True)
+            ax2_act.setChecked(entry.get("axis", 1) == 2)
+            ax2_act.triggered.connect(lambda _, idx=i: self._set_experiment_axis(rc, idx, 2))
+
         # --- Edit Settings Submenu ---
         edit_menu = menu.addMenu("Edit Settings")
-        for path_str in paths:
+        for entry in entries:
+            path_str = entry["path"]
             path_obj = Path(path_str)
             display_name = f"{path_obj.parent.parent.name} / {path_obj.stem}"
             action = edit_menu.addAction(display_name)
@@ -167,7 +180,8 @@ class ComparisonTab(QWidget):
 
         # --- Remove Plot Submenu ---
         remove_menu = menu.addMenu("Remove Plot")
-        for path_str in paths:
+        for entry in entries:
+            path_str = entry["path"]
             path_obj = Path(path_str)
             display_name = f"{path_obj.parent.parent.name} / {path_obj.stem}"
             action = remove_menu.addAction(display_name)
@@ -175,7 +189,8 @@ class ComparisonTab(QWidget):
 
         # --- Reset Defaults Submenu ---
         reset_menu = menu.addMenu("Reset to Defalt Settings")
-        for path_str in paths:
+        for entry in entries:
+            path_str = entry["path"]
             path_obj = Path(path_str)
             display_name = f"{path_obj.parent.parent.name} / {path_obj.stem}"
             action = reset_menu.addAction(display_name)
@@ -186,6 +201,12 @@ class ComparisonTab(QWidget):
         clear_act.triggered.connect(lambda: self._clear_cell(rc))
 
         menu.exec(self.canvas.mapToGlobal(self.canvas.mapFromGlobal(self.mapToGlobal(event.guiEvent.pos()))))
+
+    def _set_experiment_axis(self, rc, index, axis_num):
+        """Updates which axis an experiment uses in a specific cell."""
+        if rc in self.grid_data and index < len(self.grid_data[rc]):
+            self.grid_data[rc][index]["axis"] = axis_num
+            self.rebuild_plots()
 
     def _edit_experiment_settings(self, json_path: str):
         """
@@ -240,9 +261,10 @@ class ComparisonTab(QWidget):
 
     def _remove_single_experiment(self, rc, path_str):
         """Removes a single experiment from a specific grid cell."""
-        if rc in self.grid_data and path_str in self.grid_data[rc]:
-            self.grid_data[rc].remove(path_str)
-            # If the list for this cell becomes empty, remove the key from grid_data
+        if rc in self.grid_data:
+            # Find and remove the entry with the matching path
+            self.grid_data[rc] = [e for e in self.grid_data[rc] if e["path"] != path_str]
+            
             if not self.grid_data[rc]:
                 del self.grid_data[rc]
             self.rebuild_plots()
@@ -277,8 +299,10 @@ class ComparisonTab(QWidget):
         if key not in self.grid_data:
             self.grid_data[key] = []
         
-        if path_str not in self.grid_data[key]:
-            self.grid_data[key].append(path_str)
+        # Check if path is already in this cell
+        if not any(e["path"] == path_str for e in self.grid_data[key]):
+            # Default to Axis 1 (Left)
+            self.grid_data[key].append({"path": path_str, "axis": 1})
             event.acceptProposedAction()
             self.rebuild_plots()
 
@@ -288,8 +312,8 @@ class ComparisonTab(QWidget):
         of the collaborator associated with the experiment in the top-left cell (0,0).
         """
         # 1. Identify reference experiment from the Row 1, Col 1 cell (index 0,0)
-        paths = self.grid_data.get((0, 0), []) # This is a list of paths
-        if not paths:
+        entries = self.grid_data.get((0, 0), [])
+        if not entries:
             QMessageBox.warning(self, "Missing Reference", 
                 "Please add at least one experiment to the top-left cell (Row 1, Col 1) "
                 "so the system knows which collaborator folder to save in.")
@@ -297,7 +321,7 @@ class ComparisonTab(QWidget):
 
         # 2. Extract collaborator name from the reference path
         # Structure: .../SpectraLink_Data/[Collaborator]/[Sample]/JSON/[File].json
-        ref_path = Path(paths[0])
+        ref_path = Path(entries[0]["path"])
         try:
             collab_name = ref_path.parent.parent.parent.name
             save_dir = self.parent_window.base_dir / "SpectraLink_Data" / collab_name / "Comparison Plots"
@@ -317,10 +341,12 @@ class ComparisonTab(QWidget):
 
         try:
             serializable_grid_data = {}
-            for (r, c), paths_list in self.grid_data.items():
+            for (r, c), entries_list in self.grid_data.items():
                 cell_key = f"{r},{c}"
                 cell_entries = []
-                for path_str in paths_list:
+                for entry in entries_list:
+                    path_str = entry["path"]
+                    axis_num = entry.get("axis", 1)
                     p_obj = Path(path_str)
                     
                     # Robust relativization: Extract the path part relative to SpectraLink_Data.
@@ -345,7 +371,8 @@ class ComparisonTab(QWidget):
 
                     cell_entries.append({
                         "path": rel_path,
-                        "analysis_settings": settings
+                        "analysis_settings": settings,
+                        "axis": axis_num
                     })
                 serializable_grid_data[cell_key] = cell_entries
             
@@ -390,15 +417,15 @@ class ComparisonTab(QWidget):
             self.spin_cols.setValue(self.cols)
             
             # Deserialize grid_data: convert string keys back to tuples
-            self.grid_data = {
+            raw_grid_data = {
                 tuple(map(int, k.split(','))): v
                 for k, v in config_data["grid_data"].items()
             }
             
             # Apply individual experiment analysis settings
             new_grid_data = {}
-            for (r, c), experiments_with_settings in self.grid_data.items():
-                paths_for_cell = []
+            for (r, c), experiments_with_settings in raw_grid_data.items():
+                entries_for_cell = []
                 for exp_data in experiments_with_settings:
                     rel_path = str(exp_data["path"])
                     
@@ -432,9 +459,12 @@ class ComparisonTab(QWidget):
                     if str(ProjectManager.Session.get_path()) == path_str:
                         ProjectManager.Session.load_experiment(path_obj)
                         
+                    # Restore axis assignment
+                    axis_num = exp_data.get("axis", 1)
+                    
                     self.parent_window.experimentDataChanged.emit(path_str)
-                    paths_for_cell.append(path_str)
-                new_grid_data[(r, c)] = paths_for_cell
+                    entries_for_cell.append({"path": path_str, "axis": axis_num})
+                new_grid_data[(r, c)] = entries_for_cell
             self.grid_data = new_grid_data
             
             # Apply settings to the settings panel
@@ -462,18 +492,13 @@ class ComparisonTab(QWidget):
         # sharex=True/all enables linked zooming and panning across the entire grid
         axes = self.figure.subplots(self.rows, self.cols, sharex=True, squeeze=False)
         
-        # Option 1: Unit Police Logic
-        force_unit = None
-        if gs["force_unit"] != "None (Use Saved)":
-            force_unit = "eV" if "eV" in gs["force_unit"] else "nm"
-        
         for r in range(self.rows):
             for c in range(self.cols):
                 ax = axes[r, c]
-                self._axes_map[(r, c)] = ax
+                self._axes_map[ax] = (r, c) # Map the primary axis to its (r, c)
                 
-                paths = self.grid_data.get((r, c), [])
-                if not paths:
+                entries = self.grid_data.get((r, c), [])
+                if not entries:
                     # Show clean placeholder if cell is empty
                     msg = "Drop Experiment Here"
                     if self.rows > 2 or self.cols > 2: msg = "Drop Here"
@@ -481,11 +506,19 @@ class ComparisonTab(QWidget):
                             alpha=0.3, transform=ax.transAxes, fontsize=9)
                     continue
                 
+                # Setup secondary axis if needed
+                ax2 = None
+                
                 # Overlay Loop: Render every experiment assigned to this grid cell
-                for i, path in enumerate(paths):
+                for i, entry in enumerate(entries):
+                    path = entry["path"]
+                    axis_num = entry.get("axis", 1)
                     try:
-                        # OPTION 5: Check local JSON cache before hitting disk
-                        if path in self._json_cache:
+                        # Avoid race conditions: if this experiment is currently active in the Session,
+                        # use the session's in-memory data instead of reading from disk.
+                        if str(ProjectManager.Session.get_path()) == path:
+                            data = ProjectManager.Session.get_data()
+                        elif path in self._json_cache:
                             data = self._json_cache[path]
                         else:
                             data = ProjectManager.read_json(Path(path))
@@ -497,10 +530,19 @@ class ComparisonTab(QWidget):
                         tech = data.get("core", {}).get("technique", "Unknown") # Provide default
                         processor = get_processor(tech, self.parent_window)
                         
-                        # Pass global overrides to the processor
+                        target_ax = ax
+                        if axis_num == 2:
+                            if ax2 is None:
+                                ax2 = ax.twinx()
+                                self._axes_map[ax2] = (r, c) # Map the secondary axis to the same (r, c)
+                            target_ax = ax2
+
+                        # Avoid race conditions: if this experiment is active in the session, 
+                        # pass None as the path so the processor uses the in-memory session data.
+                        is_active = (str(ProjectManager.Session.get_path()) == path)
+                        
                         processor.generate_plot(
-                            self.figure, ax=ax, path=path, 
-                            force_unit=force_unit,         # Option 1
+                            self.figure, ax=target_ax, path=None if is_active else path, 
                             line_width=gs["line_width"],   # Option 4
                             show_legend=(gs["legend_mode"] == "Individual") # Option 3
                         )

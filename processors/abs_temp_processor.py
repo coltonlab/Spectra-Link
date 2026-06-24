@@ -89,9 +89,6 @@ class ABSTempProcessor(BaseProcessor):
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data).copy()
             
-            if kwargs.get("force_unit") == "eV": settings["convert_to_ev"] = True
-            elif kwargs.get("force_unit") == "nm": settings["convert_to_ev"] = False
-            
             use_ev = settings.get("convert_to_ev", False)
             lw = settings.get("line_width", kwargs.get("line_width", 1.5))
             ax = ax or figure.add_subplot(111)
@@ -135,10 +132,12 @@ class ABSTempProcessor(BaseProcessor):
                         ax.axvline(plot_x, color='black', linestyle='--', linewidth=1.0, alpha=0.4, 
                                    label=line.get("label", ""))
 
+            ls = "--" if settings.get("dashed_line", False) else "-"
+            alpha = settings.get("trace_alpha", 1.0)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(trace["wavelengths"], trace["absorbance"], settings, idx)
                 color = cmap(norm(trace.get("value", 0))) if vmin != vmax else cmap(idx/num_traces if num_traces > 1 else 0.5)
-                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"])
+                ax.plot(x, y, color=color, linewidth=lw, label=trace["label"], linestyle=ls, alpha=alpha)
 
             # Colorbar
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):

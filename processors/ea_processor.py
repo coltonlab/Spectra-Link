@@ -135,12 +135,6 @@ class EAProcessor(BaseProcessor):
         try:
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data).copy() # Copy to avoid mutating original
-
-            # Global Overrides (Option 1 & 4)
-            if kwargs.get("force_unit") == "eV":
-                settings["convert_to_ev"] = True
-            elif kwargs.get("force_unit") == "nm":
-                settings["convert_to_ev"] = False
             
             use_ev = settings.get("convert_to_ev", False)
             lw = settings.get("line_width", kwargs.get("line_width", 1.5))
@@ -199,6 +193,8 @@ class EAProcessor(BaseProcessor):
                             linewidth=1.0, alpha=0.4, label=v_lbl, zorder=1
                         )
 
+            ls = "--" if settings.get("dashed_line", False) else "-"
+            alpha = settings.get("trace_alpha", 1.0)
             for idx, trace in enumerate(traces):
                 x, y = self._process_trace(
                     trace["wavelengths"],
@@ -213,7 +209,7 @@ class EAProcessor(BaseProcessor):
                 else:
                     color = cmap(idx / (num_traces - 1) if num_traces > 1 else 0.5)
 
-                ax.plot(x, y, color=color, linewidth=lw)
+                ax.plot(x, y, color=color, linewidth=lw, linestyle=ls, alpha=alpha)
 
             # Add slender vertical colorbar on the right if enabled
             if num_traces > 1 and vmin != vmax and settings.get("show_colorbar", True):
