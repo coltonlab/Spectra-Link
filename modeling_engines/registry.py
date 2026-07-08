@@ -6,7 +6,7 @@ This file maps experimental techniques to available modeling engines.
 from modeling_engines.dummy_dashboard import DummyDashboard
 # Import future engines here as they are created
 from modeling_engines.fk_modeling_dashboard import FKModelingDashboard
-from modeling_engines.k_analysis_dashboard import KAnalysisDashboard
+from modeling_engines.k_analysis.k_analysis_dashboard import KAnalysisDashboard
 
 
 # Mapping of techniques to a list of available dashboard classes.

@@ -1,13 +1,14 @@
+import os
 import sys
 import numpy as np
 import pyqtgraph as pg
-from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QApplication, QMainWindow, QPushButton, QTextEdit, QFrame, QListWidget, QListWidgetItem, QGraphicsView,
-    QCheckBox
-)
+from PyQt6.QtWidgets import QWidget, QHBoxLayout, QApplication, QMainWindow
 from PyQt6.QtCore import Qt, QTimer
 from PyQt6.QtGui import QColor
+
+PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
 
 # Local Imports
 try:
@@ -19,10 +20,15 @@ try:
     from processors.factory import get_processor
     from utils.app_logger import logger
 except (ImportError, ModuleNotFoundError):
-    import os
-    sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
     from processors.factory import get_processor
     from utils.app_logger import logger
+
+try:
+    from modeling_engines.k_analysis.k_analysis_ui import build_k_analysis_ui
+    from modeling_engines.k_analysis.k_analysis_analysis import fit_gaussian as gaussian_fit, perform_k_analysis as run_k_analysis
+except (ImportError, ModuleNotFoundError):
+    from k_analysis_ui import build_k_analysis_ui
+    from k_analysis_analysis import fit_gaussian as gaussian_fit, perform_k_analysis as run_k_analysis
 
 class KAnalysisDashboard(BaseModelingDashboard):
     """
@@ -54,60 +60,23 @@ class KAnalysisDashboard(BaseModelingDashboard):
     def build_ui(self):
         layout = QHBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
-        
-        # --- Left Side: Plotting Area ---
-        left_panel = QWidget()
-        left_layout = QVBoxLayout(left_panel)
-        
-        self.plot = pg.PlotWidget(title="EA Voltage Series")
-        self.plot.showGrid(x=True, y=True)
-        self.plot.setMouseTracking(True) # Enable mouse tracking for dynamic resizing
-        self.plot.addLegend()
-        
-        self.results_log = QTextEdit()
-        self.results_log.setReadOnly(True)
-        self.results_log.setMaximumHeight(120)
-        
-        left_layout.addWidget(self.plot, stretch=4)
-        left_layout.addWidget(self.results_log, stretch=1)
-        
-        # --- Right Side: Controls ---
-        right_panel = QFrame()
-        right_panel.setFixedWidth(240)
-        right_panel.setFrameShape(QFrame.Shape.StyledPanel)
-        controls = QVBoxLayout(right_panel)
-        controls.setAlignment(Qt.AlignmentFlag.AlignTop)
-        
-        controls.addWidget(QLabel("<b>K-ANALYSIS TOOLS</b>"))
-        controls.addSpacing(10)
-        
-        self.btn_add_range = QPushButton("➕ Add Peak Range")
+
+        self.ui = build_k_analysis_ui(self)
+        layout.addWidget(self.ui)
+
+        self.plot = self.ui.plot
+        self.results_log = self.ui.results_log
+        self.btn_add_range = self.ui.btn_add_range
+        self.btn_remove_range = self.ui.btn_remove_range
+        self.range_list_widget = self.ui.range_list_widget
+        self.btn_toggle_view = self.ui.btn_toggle_view
+        self.chk_show_fits = self.ui.chk_show_fits
+
         self.btn_add_range.clicked.connect(self.add_new_range)
-        controls.addWidget(self.btn_add_range)
-        
-        self.btn_remove_range = QPushButton("➖ Remove Selected Range")
         self.btn_remove_range.clicked.connect(self.remove_selected_range)
-        self.btn_remove_range.setEnabled(False) # Initially disabled
-        controls.addWidget(self.btn_remove_range)
-        
-        controls.addWidget(QLabel("<b>Active Ranges:</b>"))
-        self.range_list_widget = QListWidget()
         self.range_list_widget.currentRowChanged.connect(self.on_range_selected_from_list)
-        controls.addWidget(self.range_list_widget)
-        
-        self.btn_toggle_view = QPushButton("📊 Switch to Log-Log Plot")
         self.btn_toggle_view.clicked.connect(self.toggle_view)
-        controls.addWidget(self.btn_toggle_view)
-        
-        self.chk_show_fits = QCheckBox("Show Gaussian Fits")
-        self.chk_show_fits.setChecked(True)
         self.chk_show_fits.stateChanged.connect(self.update_view)
-        controls.addWidget(self.chk_show_fits)
-        
-        controls.addStretch()
-        
-        layout.addWidget(left_panel, stretch=4)
-        layout.addWidget(right_panel, stretch=1)
 
     def set_active_data(self, x_data, y_data, metadata_dict):
         """Re-loads the whole series using the EAProcessor logic."""
@@ -268,30 +237,7 @@ class KAnalysisDashboard(BaseModelingDashboard):
             logger.error(f"KAnalysisDashboard: Failed to save session: {e}")
 
     def fit_gaussian(self, x_slice, y_slice):
-        if len(x_slice) < 4:
-            return None
-        
-        # Initial guesses
-        idx_max = np.argmax(np.abs(y_slice))
-        x0_guess = x_slice[idx_max]
-        A_guess = y_slice[idx_max]
-        sigma_guess = (x_slice.max() - x_slice.min()) / 4.0
-        if sigma_guess <= 0:
-            sigma_guess = 0.01
-        C_guess = np.mean(y_slice)
-        
-        p0 = [A_guess, x0_guess, sigma_guess, C_guess]
-        
-        def gauss(x, A, x0, sigma, C):
-            return A * np.exp(-((x - x0) ** 2) / (2 * sigma ** 2)) + C
-            
-        try:
-            from scipy.optimize import curve_fit
-            popt, _ = curve_fit(gauss, x_slice, y_slice, p0=p0, maxfev=2000)
-            popt[2] = abs(popt[2])
-            return popt  # [A, x0, sigma, C]
-        except Exception:
-            return None
+        return gaussian_fit(x_slice, y_slice)
 
     def _handle_plot_click(self, event):
         if not self._selection_mode_active or event.button() != Qt.MouseButton.LeftButton:
@@ -449,76 +395,21 @@ class KAnalysisDashboard(BaseModelingDashboard):
         self.btn_remove_range.setEnabled(row >= 0)
 
     def perform_k_analysis(self, region_item=None):
-        # Re-evaluate all regions and update k_results
-        self.k_results.clear()
-        self.results_log.clear()
-        
-        if not self.traces: return
-
-        processor = get_processor(self.metadata.get("core", {}).get("technique"), self.parent_window)
-        settings = self.metadata.get("analysis_settings", {})
-        
-        for idx, region in enumerate(self.regions):
-            min_x, max_x = region.getRegion()
-            voltages = []
-            peaks = []
-            
-            for i, raw_trace in enumerate(self.traces):
-                x, y = processor._process_trace(raw_trace['wavelengths'], raw_trace['ea'], settings, i)
-                
-                mask = (x >= min_x) & (x <= max_x)
-                if np.any(mask):
-                    voltages.append(raw_trace.get('value', 0))
-                    x_slice = x[mask]
-                    y_slice = y[mask]
-                    popt = self.fit_gaussian(x_slice, y_slice)
-                    if popt is not None:
-                        A, x0, sigma, C = popt
-                        fit_y = A * np.exp(-((x_slice - x0) ** 2) / (2 * sigma ** 2)) + C
-                        peaks.append(np.max(np.abs(fit_y)))
-                    else:
-                        peaks.append(np.max(np.abs(y_slice)))
-            
-            v_arr = np.array(voltages)
-            p_arr = np.array(peaks)
-            
-            # Filter out zeros for log-log fit
-            mask = (v_arr > 0) & (p_arr > 0)
-            if np.sum(mask) >= 2:
-                log_v = np.log10(v_arr[mask])
-                log_p = np.log10(p_arr[mask])
-                
-                # Linear Fit: log(P) = k * log(V) + C
-                k, intercept = np.polyfit(log_v, log_p, 1)
-                self.k_results.append({'id': idx, 'min_x': min_x, 'max_x': max_x, 'k': k, 'intercept': intercept, 'voltages': v_arr[mask], 'peaks': p_arr[mask]})
-                
-                # Update list widget item
-                item = self.range_list_widget.item(idx)
-                if item:
-                    item.setText(f"Range {idx+1}: {min_x:.2f}-{max_x:.2f} eV (k={k:.3f})")
-                else:
-                    self.range_list_widget.addItem(f"Range {idx+1}: {min_x:.2f}-{max_x:.2f} eV (k={k:.3f})")
-                self.results_log.append(f"Range {idx+1} ({min_x:.2f}-{max_x:.2f} eV): <b>k = {k:.3f}</b>")
-            else:
-                self.results_log.append(f"Range {idx+1} ({min_x:.2f}-{max_x:.2f} eV): Not enough data points for fit.")
-            self.results_log.append("-" * 20)
-
-        # Now plot all results if in k-plot view
-        if self.current_view == "k-plot" and self.k_results:
-            self.plot.clear()
-            for result in self.k_results:
-                color_idx = result['id'] % 10
-                plot_color = pg.intColor(color_idx, 10)
-                
-                self.plot.plot(result['voltages'], result['peaks'], pen=None, symbol='o', symbolBrush=plot_color, name=f"Data R{result['id']+1}")
-                # Plot Fit Line
-                fit_v = np.linspace(min(result['voltages']), max(result['voltages']), 100)
-                fit_p = 10**(result['k'] * np.log10(fit_v) + result['intercept'])
-                self.plot.plot(fit_v, fit_p, pen=pg.mkPen(plot_color, width=2), name=f"Fit R{result['id']+1} (k={result['k']:.2f})")
-        elif self.current_view == "spectrum":
-            self.update_view()
-        
-        self._save_ranges_to_session()
+        return run_k_analysis(
+            self.traces,
+            self.metadata,
+            self.parent_window,
+            self.regions,
+            self.range_list_widget,
+            self.results_log,
+            self.current_view,
+            self.plot,
+            self.update_view,
+            self._save_ranges_to_session,
+            self.k_results,
+            self.chk_show_fits,
+            fit_gaussian_fn=self.fit_gaussian,
+        )
 
     def shutdown(self):
         self.clear_all_regions(save_to_session=False)
