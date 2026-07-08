@@ -6,6 +6,7 @@ os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 from PyQt6.QtWidgets import QApplication
 
 from modeling_engines.k_analysis.k_analysis_ui import build_k_analysis_ui
+from modeling_engines.k_analysis.k_analysis_interactions import KAnalysisInteractionController
 
 
 class KAnalysisUiRefactorTest(unittest.TestCase):
@@ -23,6 +24,12 @@ class KAnalysisUiRefactorTest(unittest.TestCase):
         self.assertTrue(hasattr(widget, "range_list_widget"))
         self.assertTrue(hasattr(widget, "btn_toggle_view"))
         self.assertTrue(hasattr(widget, "chk_show_fits"))
+
+    def test_interaction_controller_can_be_created(self):
+        dummy_dashboard = type("DummyDashboard", (), {})()
+        controller = KAnalysisInteractionController(dummy_dashboard)
+
+        self.assertIsNotNone(controller)
 
 
 if __name__ == "__main__":

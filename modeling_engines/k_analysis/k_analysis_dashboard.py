@@ -26,9 +26,11 @@ except (ImportError, ModuleNotFoundError):
 try:
     from modeling_engines.k_analysis.k_analysis_ui import build_k_analysis_ui
     from modeling_engines.k_analysis.k_analysis_analysis import fit_gaussian as gaussian_fit, perform_k_analysis as run_k_analysis
+    from modeling_engines.k_analysis.k_analysis_interactions import KAnalysisInteractionController
 except (ImportError, ModuleNotFoundError):
     from k_analysis_ui import build_k_analysis_ui
     from k_analysis_analysis import fit_gaussian as gaussian_fit, perform_k_analysis as run_k_analysis
+    from k_analysis_interactions import KAnalysisInteractionController
 
 class KAnalysisDashboard(BaseModelingDashboard):
     """
@@ -71,6 +73,8 @@ class KAnalysisDashboard(BaseModelingDashboard):
         self.range_list_widget = self.ui.range_list_widget
         self.btn_toggle_view = self.ui.btn_toggle_view
         self.chk_show_fits = self.ui.chk_show_fits
+
+        self.interactions = KAnalysisInteractionController(self)
 
         self.btn_add_range.clicked.connect(self.add_new_range)
         self.btn_remove_range.clicked.connect(self.remove_selected_range)
@@ -194,24 +198,10 @@ class KAnalysisDashboard(BaseModelingDashboard):
         self._connect_plot_mouse_events(True)
 
     def _connect_plot_mouse_events(self, connect: bool):
-        scene = self.plot.scene()
-        if connect:
-            try: scene.sigMouseClicked.disconnect(self._handle_plot_click)
-            except TypeError: pass
-            try: scene.sigMouseMoved.disconnect(self._handle_plot_mouse_move)
-            except TypeError: pass
-            scene.sigMouseClicked.connect(self._handle_plot_click)
-            scene.sigMouseMoved.connect(self._handle_plot_mouse_move)
-        else:
-            try: scene.sigMouseClicked.disconnect(self._handle_plot_click)
-            except TypeError: pass
-            try: scene.sigMouseMoved.disconnect(self._handle_plot_mouse_move)
-            except TypeError: pass
+        self.interactions.connect_plot_mouse_events(connect)
 
     def _set_region_pen(self, region, pen):
-        if hasattr(region, 'lines'):
-            for line in region.lines:
-                line.setPen(pen)
+        self.interactions.set_region_pen(region, pen)
 
     def _save_ranges_to_session(self):
         if getattr(self, '_is_loading', False):
@@ -240,113 +230,22 @@ class KAnalysisDashboard(BaseModelingDashboard):
         return gaussian_fit(x_slice, y_slice)
 
     def _handle_plot_click(self, event):
-        if not self._selection_mode_active or event.button() != Qt.MouseButton.LeftButton:
-            return
-
-        pos = event.scenePos()
-        x_coord = self.plot.plotItem.vb.mapSceneToView(pos).x()
-
-        if self._first_click_x is None:
-            self._first_click_x = x_coord
-            self.results_log.setText("Click again to define the width of your peak range.")
-            
-            # Calculate a sensible default width based on the current x_data range
-            if self.x_data is not None and len(self.x_data) > 1:
-                x_range = self.x_data.max() - self.x_data.min()
-                default_width = x_range * 0.05 # 5% of the total x-range
-            else:
-                default_width = 0.1 # Fallback if no x_data or single point
-
-            # Create temp region centered at click
-            # Set movable=False so that the second click is not intercepted by the temporary region
-            self._temp_region = pg.LinearRegionItem(values=(x_coord - default_width/2, x_coord + default_width/2), movable=False)
-            self._temp_region.setZValue(100)
-            self._temp_region.setBrush(pg.mkBrush(QColor(255, 255, 0, 50)))
-            self._set_region_pen(self._temp_region, pg.mkPen(QColor(255, 255, 0, 200), width=1))
-            self.plot.addItem(self._temp_region)
-        else:
-            # Second click: finalize the width
-            center_x = self._first_click_x
-            width = abs(x_coord - center_x) * 2
-            
-            # Ensure a minimum width to avoid zero-width regions
-            min_allowed_width = (self.x_data.max() - self.x_data.min()) * 0.005 if self.x_data is not None and len(self.x_data) > 1 else 0.01
-            if width < min_allowed_width:
-                width = min_allowed_width
-            x_start, x_end = center_x - width / 2, center_x + width / 2
-            
-            if self._temp_region:
-                self.plot.removeItem(self._temp_region)
-                self._temp_region = None
-
-            self._create_and_add_region(x_start, x_end)
-            self._cancel_selection_mode()
+        self.interactions.handle_plot_click(event)
 
     def _handle_plot_mouse_move(self, pos):
-        if self._selection_mode_active and self._first_click_x is not None and self._temp_region:
-            view_pos = self.plot.plotItem.vb.mapSceneToView(pos)
-            if view_pos is None: return
-            
-            current_x = view_pos.x()
-            center_x = self._first_click_x
-            
-            # Ensure a minimum width
-            min_allowed_width = (self.x_data.max() - self.x_data.min()) * 0.005 if self.x_data is not None and len(self.x_data) > 1 else 0.01
-            
-            width = abs(current_x - center_x) * 2
-            if width < min_allowed_width:
-                width = min_allowed_width
-
-            self._temp_region.setRegion((center_x - width/2, center_x + width/2))
+        self.interactions.handle_plot_mouse_move(pos)
 
     def _finalize_temp_region(self):
-        if self._temp_region and self._selection_mode_active and self._first_click_x is not None:
-            x_start, x_end = self._temp_region.getRegion()
-            self.plot.removeItem(self._temp_region)
-            self._temp_region = None
-            self._create_and_add_region(x_start, x_end)
-            self._cancel_selection_mode()
+        self.interactions.finalize_temp_region()
 
     def _create_and_add_region(self, x_start, x_end):
-        new_region = pg.LinearRegionItem(values=(x_start, x_end))
-        new_region.setZValue(10)
-        
-        color_idx = len(self.regions) % 10
-        region_color = pg.intColor(color_idx, 10)
-        new_region.setBrush(pg.mkBrush(QColor(0, 0, 0, 0)))
-        new_region.setHoverBrush(pg.mkBrush(QColor(0, 0, 255, 30)))
-        self._set_region_pen(new_region, pg.mkPen(region_color, width=4))
-
-        self.plot.addItem(new_region)
-        self.regions.append(new_region)
-        
-        new_region.sigRegionChangeFinished.connect(self.perform_k_analysis)
-        new_region.sigRegionChanged.connect(self._update_region_label)
-        
-        self.perform_k_analysis()
-        self.range_list_widget.setCurrentRow(len(self.regions) - 1)
-        self.btn_remove_range.setEnabled(True)
+        self.interactions.create_and_add_region(x_start, x_end)
 
     def _cancel_selection_mode(self):
-        self._selection_mode_active = False
-        self._first_click_x = None
-        if self._temp_region:
-            self.plot.removeItem(self._temp_region)
-            self._temp_region = None
-        self.results_log.clear()
-        self._set_ui_selection_mode(False)
-        self._connect_plot_mouse_events(False)
+        self.interactions.cancel_selection_mode()
 
     def _set_ui_selection_mode(self, active: bool):
-        self.btn_add_range.setEnabled(not active)
-        self.btn_remove_range.setEnabled(not active and bool(self.regions))
-        self.btn_toggle_view.setEnabled(not active)
-        self.range_list_widget.setEnabled(not active)
-        self.chk_show_fits.setEnabled(not active)
-        if active:
-            self.plot.setCursor(Qt.CursorShape.CrossCursor)
-        else:
-            self.plot.unsetCursor()
+        self.interactions.set_ui_selection_mode(active)
 
     def remove_selected_range(self):
         current_row = self.range_list_widget.currentRow()
@@ -370,29 +269,10 @@ class KAnalysisDashboard(BaseModelingDashboard):
             self._save_ranges_to_session()
 
     def _update_region_label(self, region_item):
-        # Find the index of the region that changed
-        try:
-            idx = self.regions.index(region_item)
-            min_x, max_x = region_item.getRegion()
-            item = self.range_list_widget.item(idx)
-            if item:
-                # Use timer to avoid recursion during dragging
-                QTimer.singleShot(0, lambda: item.setText(f"Range {idx+1}: {min_x:.2f} - {max_x:.2f} eV"))
-        except ValueError:
-            pass # Region might have been removed
+        self.interactions.update_region_label(region_item)
 
     def on_range_selected_from_list(self, row):
-        # Highlight the selected region on the plot
-        for i, region in enumerate(self.regions):
-            if i == row:
-                region.setZValue(11) # Bring to front
-                self._set_region_pen(region, pg.mkPen('y', width=5)) # Highlight
-            else:
-                region.setZValue(10)
-                color_idx = i % 10
-                region_color = pg.intColor(color_idx, 10)
-                self._set_region_pen(region, pg.mkPen(region_color, width=4))
-        self.btn_remove_range.setEnabled(row >= 0)
+        self.interactions.on_range_selected_from_list(row)
 
     def perform_k_analysis(self, region_item=None):
         return run_k_analysis(
