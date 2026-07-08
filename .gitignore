@@ -1,5 +1,5 @@
 *.pyc
-/Data/
+# /Data/
 _pycache_/
 build/
 dist/
