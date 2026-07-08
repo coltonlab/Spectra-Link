@@ -1,6 +1,8 @@
 import os
 import sys
 import numpy as np
+import pandas as pd
+import re
 import pyqtgraph as pg
 from PyQt6.QtWidgets import QWidget, QHBoxLayout, QApplication, QMainWindow
 from PyQt6.QtCore import Qt, QTimer
@@ -443,22 +445,40 @@ if __name__ == "__main__":
     dash = KAnalysisDashboard()
     win.setCentralWidget(dash)
     
-    # Mock EA data for standalone testing (similar to EAProcessor output)
-    x = np.linspace(1.5, 2.5, 500)
-    mock_traces = []
-    for v in np.linspace(0.5, 5.0, 5): # Simulate 5 voltage traces
-        y_base = np.sin((x-1.8)*20) * np.exp(-(x-2)**2 / 0.05) * (v**2) * 0.1
-        noise = np.random.normal(0, 0.005, 500)
-        mock_traces.append({
-            "wavelengths": x,
-            "ea": y_base + noise,
-            "label": f"{v:.1f} V",
-            "value": v
-        })
-    dash.traces = mock_traces # Directly set traces for standalone test
+    # 1. Load your actual data file
+    # Only add a filepath if you are running k_analysis_dashboard.py and not running main.py
+    # This is for already compiled EA data into a single file. If all files are separate, use main.py and load each file individually.
+    filepath = "Data/AFRL Compiled EA Data/(R)-((3-I)MBA)_2 PbI_4 EA_series_data_295K.csv"
+    df = pd.read_csv(filepath)
+    
+    # 2. Extract X data (Energy) and base Y data (Absorption)
+    x = df["Energy (eV)"].values
+    absorption = df["Absorption (OD)"].values
+    
+    # 3. Dynamically parse the EA voltage columns
+    real_traces = []
+    for col in df.columns:
+        if col.startswith("EA"):
+            # Use regex to extract the numeric value (e.g., 20 from "EA 20 kV/cm (mOD)")
+            match = re.search(r"(\d+)", col)
+            voltage_value = float(match.group(1)) if match else 0.0
+            
+            # Create the clean label (e.g., "20 kV/cm")
+            label = col.replace("EA ", "").replace(" (mOD)", "")
+            
+            real_traces.append({
+                "wavelengths": x,
+                "ea": df[col].values,
+                "label": label,
+                "value": voltage_value
+            })
+            
+    # 4. Feed your real data into the dashboard
+    dash.traces = real_traces 
     dash.metadata = {"core": {"technique": "EA Voltage Series"}, "analysis_settings": {}}
-    dash.x_data = x # Set x_data for range calculation
-    dash.y_data = y_base # Set y_data for range calculation
+    dash.x_data = x             # Energy axis
+    dash.y_data = absorption    # Absorption background/baseline
+    
     dash.update_view()
     
     win.show()
