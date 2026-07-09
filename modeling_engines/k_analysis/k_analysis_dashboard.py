@@ -328,7 +328,7 @@ if __name__ == "__main__":
     # 1. Load your actual data file
     # Only add a filepath if you are running k_analysis_dashboard.py and not running main.py
     # This is for already compiled EA data into a single file. If all files are separate, use main.py and load each file individually.
-    filepath = "Data/AFRL Compiled EA Data/(R)-((3-I)MBA)_2 PbI_4 EA_series_data_295K.csv"
+    filepath = "Data/AFRL Compiled EA Data/(R)-((3-Br)MBA)_2 PbI_4 EA_series_data_300K.csv"
     df = pd.read_csv(filepath)
     
     # 2. Extract X data (Energy) and base Y data (Absorption)

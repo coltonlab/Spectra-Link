@@ -19,12 +19,13 @@ class EATempProcessor(BaseProcessor):
     def __init__(self, parent_window):
         super().__init__(parent_window)
 
-    def _load_traces(self, json_data):
+    def _load_traces(self, json_data, settings=None):
         """
         Groups files by temperature. For each temperature, it looks for a 
         'Voltage' scan and a 'Transmission' scan to calculate the EA signal.
         """
         data_files = json_data.get("data_files", {})
+        settings = settings or {}
         # Files associated with a local parameter (Temperature) are stored here
         scan_list = data_files.get("temperature_scans", [])
         
@@ -79,10 +80,19 @@ class EATempProcessor(BaseProcessor):
 
                 ea_vals = cmf.EA(int_ac, int_dc_safe)
                 
+                if settings.get("legend_label"):
+                    base_label = settings.get("legend_label").strip()
+                    if len(groups) > 1:
+                        label = f"{base_label} ({temp} K)" if temp else base_label
+                    else:
+                        label = base_label
+                else:
+                    label = f"{temp} K"
+
                 traces.append({
                     "wavelengths": wl_ac,
                     "ea": ea_vals,
-                    "label": f"{temp} K",
+                    "label": label,
                     "value": temp
                 })
 
@@ -167,7 +177,7 @@ class EATempProcessor(BaseProcessor):
                 colormap_name += "_r"
             
             cmap = plt.get_cmap(colormap_name)
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, settings)
             if not traces:
                 logger.warning(f"EATempProcessor: No traces loaded for {json_data.get('core',{}).get('experiment_name')}. Plotting skipped.")
                 return False
@@ -247,7 +257,7 @@ class EATempProcessor(BaseProcessor):
         try:
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data)
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, settings)
             if not traces: return False
 
             export_dict = {}

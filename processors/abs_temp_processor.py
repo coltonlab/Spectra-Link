@@ -14,7 +14,8 @@ class ABSTempProcessor(BaseProcessor):
     def __init__(self, parent_window):
         super().__init__(parent_window)
 
-    def _load_traces(self, json_data):
+    def _load_traces(self, json_data, settings=None):
+        settings = settings or {}
         data_files = json_data.get("data_files", {})
         traces = []
         
@@ -36,7 +37,14 @@ class ABSTempProcessor(BaseProcessor):
         for entry in scan_list:
             rel_path = entry.get("file")
             temp = entry.get("temperature", 0)
-            label = f"{temp} K" if temp else "Sample"
+            if settings.get("legend_label"):
+                base_label = settings.get("legend_label").strip()
+                if len(scan_list) > 1:
+                    label = f"{base_label} ({temp} K)" if temp else base_label
+                else:
+                    label = base_label
+            else:
+                label = f"{temp} K" if temp else "Sample"
             
             wl_s, int_s = self.load_raw_data(rel_path, priority=abs_priority)
             if wl_s is None: continue # Skip this scan if data couldn't be loaded
@@ -101,7 +109,7 @@ class ABSTempProcessor(BaseProcessor):
             if settings.get("reverse_colormap", False):
                 colormap_name += "_r"
             cmap = plt.get_cmap(colormap_name)
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, settings)
             num_traces = len(traces)
             if num_traces == 0:
                 logger.warning(f"ABSTempProcessor: No traces loaded for {json_data.get('core',{}).get('experiment_name')}. Plotting skipped.")

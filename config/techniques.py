@@ -27,6 +27,7 @@ TECHNIQUE_CONFIG = {
         "analysis_options": [
             "show_title",
             "plot_title",
+            "sample_label",
             "line_width",
             "scaling_factor",
             "trace_color",
@@ -40,6 +41,7 @@ TECHNIQUE_CONFIG = {
             "max_wavelength",
             "normalize_to_peak",
             "show_legend",
+            "legend_label",
         ],
     },
 
@@ -81,6 +83,7 @@ TECHNIQUE_CONFIG = {
             "show_vertical_lines",
             "vertical_lines",
             "show_legend",
+            "legend_label",
         ],
     },
 
@@ -126,6 +129,7 @@ TECHNIQUE_CONFIG = {
             "show_vertical_lines",
             "vertical_lines",
             "show_legend",
+            "legend_label",
         ],
     },
 
@@ -170,6 +174,8 @@ TECHNIQUE_CONFIG = {
             "show_zero_line",
             "show_vertical_lines",
             "vertical_lines",
+            "show_legend",
+            "legend_label",
             "overlay_absorption",
         ],
     },
@@ -207,6 +213,7 @@ TECHNIQUE_CONFIG = {
             "convert_to_ev",
             "normalize_to_peak",
             "show_legend",
+            "legend_label",
             "trace_color",
             "vertical_lines",
         ],
@@ -239,6 +246,7 @@ TECHNIQUE_CONFIG = {
             "normalize_to_peak",
             "offset_traces",
             "show_legend",
+            "legend_label",
         ],
     },
 }
@@ -363,6 +371,12 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "tooltip": "Display a legend labelling each trace",
         "category": "Visualization",
     },
+    "legend_label": {
+        "label":   "Sample Label",
+        "tooltip": "Custom sample label for the data curve in the legend",
+        "type":    "text",
+        "category": "Visualization",
+    },
     "show_title": {
         "label":   "Show Title",
         "tooltip": "Toggle the plot title on or off",
@@ -371,6 +385,12 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
     "plot_title": {
         "label":   "Edit Title",
         "tooltip": "Custom text for the plot title",
+        "type":    "text",
+        "category": "Visualization",
+    },
+    "sample_label": {
+        "label":   "Sample Label",
+        "tooltip": "Custom label for the sample in the legend",
         "type":    "text",
         "category": "Visualization",
     },

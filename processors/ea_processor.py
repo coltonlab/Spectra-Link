@@ -24,8 +24,9 @@ class EAProcessor(BaseProcessor):
 
     # ── internal helpers ──────────────────────────────────────────────────────
 
-    def _load_traces(self, json_data):
+    def _load_traces(self, json_data, settings=None):
         """Load traces from the current experiment JSON."""
+        settings = settings or {}
         data_files = json_data.get("data_files", {})
         tech = json_data.get("core", {}).get("technique", "")
         
@@ -48,12 +49,24 @@ class EAProcessor(BaseProcessor):
         for entry in scan_list:
             rel_path = entry.get("file")
             # Determine label
-            if "voltage" in entry:
-                label = f"{entry['voltage']} V"
-            elif "temperature" in entry:
-                label = f"{entry['temperature']} K"
+            if settings.get("legend_label"):
+                base_label = settings.get("legend_label").strip()
+                if len(scan_list) > 1:
+                    if "voltage" in entry:
+                        label = f"{base_label} ({entry['voltage']} V)"
+                    elif "temperature" in entry:
+                        label = f"{base_label} ({entry['temperature']} K)"
+                    else:
+                        label = base_label
+                else:
+                    label = base_label
             else:
-                label = "EA Trace"
+                if "voltage" in entry:
+                    label = f"{entry['voltage']} V"
+                elif "temperature" in entry:
+                    label = f"{entry['temperature']} K"
+                else:
+                    label = "EA Trace"
 
             wl_ac, int_ac = self.load_raw_data(rel_path)
             if wl_ac is not None:
@@ -157,7 +170,7 @@ class EAProcessor(BaseProcessor):
             cmap = plt.get_cmap(colormap_name)
 
             # Load traces once for efficiency and color mapping
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, settings)
             num_traces = len(traces)
             if num_traces == 0:
                 return False
@@ -257,7 +270,7 @@ class EAProcessor(BaseProcessor):
             json_data = self.get_json_data(path)
             settings = self.get_settings(json_data)
             
-            traces = self._load_traces(json_data)
+            traces = self._load_traces(json_data, settings)
             if not traces:
                 return False
 
