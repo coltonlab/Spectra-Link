@@ -40,6 +40,17 @@ class KAnalysisInteractionController:
             for line in region.lines:
                 line.setPen(pen)
 
+    def set_region_style(self, region, color, *, line_width=4, brush_alpha=25, hover_alpha=30) -> None:
+        brush_color = QColor(color)
+        brush_color.setAlpha(brush_alpha)
+        region.setBrush(pg.mkBrush(brush_color))
+
+        hover_color = QColor(color)
+        hover_color.setAlpha(hover_alpha)
+        region.setHoverBrush(pg.mkBrush(hover_color))
+
+        self.set_region_pen(region, pg.mkPen(color, width=line_width))
+
     def handle_plot_click(self, event) -> None:
         dashboard = self.dashboard
         if not dashboard._selection_mode_active or event.button() != Qt.MouseButton.LeftButton:
@@ -63,8 +74,13 @@ class KAnalysisInteractionController:
                 movable=False,
             )
             dashboard._temp_region.setZValue(100)
-            dashboard._temp_region.setBrush(pg.mkBrush(QColor(255, 255, 0, 50)))
-            self.set_region_pen(dashboard._temp_region, pg.mkPen(QColor(255, 255, 0, 200), width=1))
+            self.set_region_style(
+                dashboard._temp_region,
+                QColor(255, 255, 0, 255),
+                line_width=1,
+                brush_alpha=25,
+                hover_alpha=40,
+            )
             dashboard.plot.addItem(dashboard._temp_region)
         else:
             center_x = dashboard._first_click_x
@@ -124,19 +140,13 @@ class KAnalysisInteractionController:
 
         color_idx = len(dashboard.regions) % 10
         region_color = pg.intColor(color_idx, 10)
-        new_region.setBrush(pg.mkBrush(QColor(0, 0, 0, 0)))
-        new_region.setHoverBrush(pg.mkBrush(QColor(0, 0, 255, 30)))
-        self.set_region_pen(new_region, pg.mkPen(region_color, width=4))
+        self.set_region_style(new_region, region_color, line_width=4, brush_alpha=25, hover_alpha=30)
 
         dashboard.plot.addItem(new_region)
         dashboard.regions.append(new_region)
 
         new_region.sigRegionChangeFinished.connect(dashboard.perform_k_analysis)
         new_region.sigRegionChanged.connect(self.update_region_label)
-
-        dashboard.perform_k_analysis()
-        dashboard.range_list_widget.setCurrentRow(len(dashboard.regions) - 1)
-        dashboard.btn_remove_range.setEnabled(True)
 
     def cancel_selection_mode(self) -> None:
         dashboard = self.dashboard

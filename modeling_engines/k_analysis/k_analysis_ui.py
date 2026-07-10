@@ -64,9 +64,22 @@ class KAnalysisUiWidget(QWidget):
         self.btn_toggle_view = QPushButton("📊 Switch to Log-Log Plot", self)
         controls.addWidget(self.btn_toggle_view)
 
+        checkbox_row = QVBoxLayout()
         self.chk_show_fits = QCheckBox("Show Gaussian Fits", self)
         self.chk_show_fits.setChecked(True)
-        controls.addWidget(self.chk_show_fits)
+        checkbox_row.addWidget(self.chk_show_fits)
+
+        self.chk_show_cooks = QCheckBox("Show Studentized Residuals", self)
+        self.chk_show_cooks.setChecked(False)
+        checkbox_row.addWidget(self.chk_show_cooks)
+        controls.addLayout(checkbox_row)
+
+        self.curve_list_label = QLabel("Select curves to include in fit:", self)
+        controls.addWidget(self.curve_list_label)
+
+        self.curve_list_widget = QListWidget(self)
+        self.curve_list_widget.setEnabled(False)
+        controls.addWidget(self.curve_list_widget)
 
         controls.addStretch()
 
