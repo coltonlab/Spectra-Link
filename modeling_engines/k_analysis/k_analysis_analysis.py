@@ -132,7 +132,7 @@ def perform_k_analysis(traces, metadata, parent_window, regions, range_list_widg
                 item.setText(f"Range {idx + 1}: {min_x:.2f}-{max_x:.2f} eV (k={k_label})")
             else:
                 range_list_widget.addItem(f"Range {idx + 1}: {min_x:.2f}-{max_x:.2f} eV (k={k_label})")
-            results_log.append(f"Range {idx + 1} ({min_x:.2f}-{max_x:.2f} eV): <b>k = {k_label}</b>")
+            results_log.append(f"Range {idx + 1} ({min_x:.2f}-{max_x:.2f} eV): <b>k = {k_label}</b>, intercept = {fit_result.get('a', np.nan)}")
         else:
             results_log.append(f"Range {idx + 1} ({min_x:.2f}-{max_x:.2f} eV): Not enough data points for fit.")
         results_log.append("-" * 20)

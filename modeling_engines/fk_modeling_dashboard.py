@@ -3,7 +3,7 @@ import numpy as np
 import pyqtgraph as pg
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, 
-    QApplication, QMainWindow, QPushButton, QTextEdit, QFrame
+    QApplication, QMainWindow, QPushButton, QTextEdit, QFrame, QCheckBox
 )
 from PyQt6.QtCore import Qt
 
@@ -44,6 +44,10 @@ class FKModelingDashboard(BaseModelingDashboard):
         self.plot.addLegend()
         self.plot.showGrid(x=True, y=True)
         
+        self.region = pg.LinearRegionItem()
+        self.region.setZValue(10)
+        self.plot.addItem(self.region)
+        
         self.results_log = QTextEdit()
         self.results_log.setReadOnly(True)
         self.results_log.setPlaceholderText("Fit coefficients will appear here...")
@@ -67,6 +71,11 @@ class FKModelingDashboard(BaseModelingDashboard):
         self.btn_fit.clicked.connect(self.execute_fk_analysis)
         controls.addWidget(self.btn_fit)
         
+        self.chk_show_full_fit = QCheckBox("Show Fit Across Entire Range")
+        self.chk_show_full_fit.setChecked(False)
+        self.chk_show_full_fit.toggled.connect(self.execute_fk_analysis)
+        controls.addWidget(self.chk_show_full_fit)
+        
         controls.addStretch()
         
         layout.addWidget(left_panel, stretch=4)
@@ -77,11 +86,15 @@ class FKModelingDashboard(BaseModelingDashboard):
         self.y_data = y_data
         self.metadata = metadata_dict
         self.update_view()
+        if self.x_data is not None and len(self.x_data) > 0:
+            min_x, max_x = np.min(self.x_data), np.max(self.x_data)
+            self.region.setRegion([min_x, max_x])
 
     def update_view(self):
         if self.x_data is None: return
         self.plot.clear()
         self.plot.plot(self.x_data, self.y_data, pen='w', name="Experimental EA")
+        self.plot.addItem(self.region)
 
     def execute_fk_analysis(self):
         """Performs the FK fit using derivatives of the absorption."""
@@ -89,17 +102,52 @@ class FKModelingDashboard(BaseModelingDashboard):
             logger.warning("FK Dashboard: No data loaded to fit.")
             return
 
-        # NOTE: In a full implementation, you would load the Absorption spectrum 
-        # from the project files and calculate real derivatives. 
-        # For now, we generate components based on the data to demonstrate the fit.
+        min_x, max_x = self.region.getRegion()
+        mask = (self.x_data >= min_x) & (self.x_data <= max_x)
+        
+        if not np.any(mask):
+            self.results_log.append("No data in the selected region.")
+            return
+
+        # Calculate derivatives over full dataset to avoid edge effects
         d1 = np.gradient(self.y_data)
         d2 = np.gradient(d1)
-        d3 = np.gradient(d2)
         
-        fit_curve = FK_fit(d1, d2, d3, self.y_data)
+        d1_fit = d1[mask]
+        d2_fit = d2[mask]
+        y_fit = self.y_data[mask]
+        x_fit = self.x_data[mask]
+
+        from scipy.optimize import minimize
+        def objective(guess):
+            a, b = guess
+            fit = a * d1_fit + b * d2_fit
+            return np.sum((fit - y_fit) ** 2)
+
+        initial_guess = [0.01, 0.01]
+        result = minimize(objective, initial_guess)
         
-        self.plot.plot(self.x_data, fit_curve, pen=pg.mkPen('y', width=2), name="FK Fit Result")
-        self.results_log.append("FK Fit executed successfully.")
+        if not result.success:
+            self.results_log.append(f"FK Fit failed: {result.message}")
+            return
+
+        a, b = result.x
+        
+        if self.chk_show_full_fit.isChecked():
+            x_plot = self.x_data
+            fit_curve = a * d1 + b * d2
+        else:
+            x_plot = x_fit
+            fit_curve = a * d1_fit + b * d2_fit
+        
+        if hasattr(self, 'fit_plot_item') and self.fit_plot_item in self.plot.listDataItems():
+            self.plot.removeItem(self.fit_plot_item)
+            
+        self.fit_plot_item = self.plot.plot(x_plot, fit_curve, pen=pg.mkPen('y', width=2), name="FK Fit Result")
+        self.results_log.append("-------------------------")
+        self.results_log.append(f"FK Fit executed successfully.")
+        self.results_log.append(f"Fitted range: {min_x:.3f} eV to {max_x:.3f} eV")
+        self.results_log.append(f"Coefficients:\n 1st Deriv: {a:.4e}\n 2nd Deriv: {b:.4e}")
 
     def shutdown(self):
         self.plot.clear()
