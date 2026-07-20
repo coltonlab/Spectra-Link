@@ -328,6 +328,12 @@ class DiscoveryTab(QWidget):
                 widget = QLineEdit(str(default))
                 widget.setStyleSheet(self._get_widget_style(widget, self.parent_window.dark_mode))
                 widget.textChanged.connect(self._schedule_autosave)
+            elif param_type == "combo":
+                widget = QComboBox()
+                widget.addItems(param.get("options", []))
+                widget.setCurrentText(str(default))
+                widget.setStyleSheet(self._get_widget_style(widget, self.parent_window.dark_mode))
+                widget.currentTextChanged.connect(self._schedule_autosave)
             else:
                 mn       = param.get("min",      0.0)
                 mx       = param.get("max",   9999.0)

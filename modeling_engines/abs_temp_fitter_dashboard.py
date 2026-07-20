@@ -5,8 +5,10 @@ from scipy.optimize import curve_fit
 
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, 
                              QHBoxLayout, QPushButton, QSlider, 
-                             QLabel, QCheckBox, QDoubleSpinBox, QGroupBox, QScrollArea)
+                             QLabel, QCheckBox, QDoubleSpinBox, QGroupBox, QScrollArea,
+                             QButtonGroup, QFrame, QSizePolicy)
 from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtGui import QFont
 
 import matplotlib
 matplotlib.use('Qt5Agg')
@@ -24,6 +26,7 @@ def gaussian(x, amp, cen, wid):
 
 def lorentzian(x, amp, cen, wid):
     return (amp * wid**2) / ((x - cen)**2 + wid**2)
+
 def pseudo_voigt(x, amp, cen, wid, eta):
     return eta * lorentzian(x, amp, cen, wid) + (1 - eta) * gaussian(x, amp, cen, wid)
 
@@ -61,9 +64,122 @@ class MplCanvas(FigureCanvas):
         super().__init__(fig)
 
 # ==========================================
+# TEMPERATURE SELECTOR PANEL
+# ==========================================
+class TemperatureSelectorPanel(QFrame):
+    """A horizontal panel of temperature buttons for selecting the active trace."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFrameShape(QFrame.Shape.StyledPanel)
+        self.setFixedHeight(70)
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+        
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(8, 4, 8, 4)
+        outer_layout.setSpacing(2)
+        
+        header_lbl = QLabel("Select Temperature to Fit:")
+        header_font = QFont()
+        header_font.setBold(True)
+        header_font.setPointSize(8)
+        header_lbl.setFont(header_font)
+        outer_layout.addWidget(header_lbl)
+        
+        # Scroll area for buttons
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
+        scroll.setFixedHeight(40)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        
+        self._btn_container = QWidget()
+        self._btn_layout = QHBoxLayout(self._btn_container)
+        self._btn_layout.setContentsMargins(0, 0, 0, 0)
+        self._btn_layout.setSpacing(4)
+        self._btn_layout.addStretch()
+        
+        scroll.setWidget(self._btn_container)
+        outer_layout.addWidget(scroll)
+        
+        self._button_group = QButtonGroup(self)
+        self._button_group.setExclusive(True)
+        self._buttons = []
+        self._callback = None
+
+    def set_callback(self, fn):
+        """Set the function to call when a temperature is selected. fn(index)."""
+        self._callback = fn
+
+    def populate(self, traces):
+        """Clear and repopulate buttons from a list of trace dicts with 'label' and 'value'."""
+        # Remove all existing buttons
+        for btn in self._buttons:
+            self._button_group.removeButton(btn)
+            self._btn_layout.removeWidget(btn)
+            btn.deleteLater()
+        self._buttons.clear()
+
+        if not traces:
+            return
+
+        # Insert buttons before the stretch (remove stretch first)
+        while self._btn_layout.count():
+            item = self._btn_layout.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        for i, trace in enumerate(traces):
+            label = trace.get("label", f"Trace {i}")
+            btn = QPushButton(label)
+            btn.setCheckable(True)
+            btn.setFixedHeight(30)
+            btn.setMinimumWidth(70)
+            btn.setStyleSheet("""
+                QPushButton {
+                    border: 1px solid #555;
+                    border-radius: 4px;
+                    padding: 2px 8px;
+                    font-size: 11px;
+                }
+                QPushButton:checked {
+                    background-color: #1565C0;
+                    color: white;
+                    border: 2px solid #0D47A1;
+                    font-weight: bold;
+                }
+                QPushButton:hover:!checked {
+                    background-color: #37474F;
+                    color: white;
+                }
+            """)
+            idx = i
+            btn.clicked.connect(lambda checked, i=idx: self._on_button_clicked(i))
+            self._button_group.addButton(btn, i)
+            self._btn_layout.addWidget(btn)
+            self._buttons.append(btn)
+
+        self._btn_layout.addStretch()
+
+        # Auto-select first button
+        if self._buttons:
+            self._buttons[0].setChecked(True)
+
+    def select(self, index):
+        """Programmatically select a button by index."""
+        if 0 <= index < len(self._buttons):
+            self._buttons[index].setChecked(True)
+
+    def _on_button_clicked(self, index):
+        if self._callback:
+            self._callback(index)
+
+
+# ==========================================
 # MAIN DASHBOARD WIDGET
 # ==========================================
-class EAAbsorptionFitterDashboard(BaseModelingDashboard):
+class AbsorptionTempFitterDashboard(BaseModelingDashboard):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.parent_window = getattr(parent, 'parent_window', None)
@@ -73,6 +189,8 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         self.metadata = {}
         self._is_loading = False
         self.plot_mode = "standard"
+        self.all_traces = []          # All loaded temperature traces
+        self.active_trace_index = 0   # Currently selected temperature index
         
         self.save_timer = QTimer(self)
         self.save_timer.setSingleShot(True)
@@ -83,7 +201,14 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         self.build_ui()
 
     def build_ui(self):
-        main_layout = QHBoxLayout(self)
+        # Outer layout: main content on top, temperature selector on bottom
+        outer_layout = QVBoxLayout(self)
+        outer_layout.setContentsMargins(0, 0, 0, 0)
+        outer_layout.setSpacing(0)
+        
+        # --- Main Content Area ---
+        main_widget = QWidget()
+        main_layout = QHBoxLayout(main_widget)
         
         # Left Side Controls (Scrollable)
         scroll_area = QScrollArea()
@@ -151,7 +276,7 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         self.p2_cen = self.create_slider_row(p2_lay, "Center (eV):", 1500, 3500, 2600, 0.001)
         self.p2_wid = self.create_slider_row(p2_lay, "Core Width:", 1, 200, 30, 0.001)
         self.p2_eta = self.create_slider_row(p2_lay, "Lorentz Mix (η):", 0, 100, 50, 0.01)
-        self.p2_eu = self.create_slider_row(p2_lay, "Urbach E (eV):", 1, 200, 10, 0.001)
+        self.p2_eu = self.create_slider_row(p2_lay, "Urbach E (eV):", 0, 200, 10, 0.001)
         self.p2_group.setLayout(p2_lay)
         controls_layout.addWidget(self.p2_group)
 
@@ -165,20 +290,14 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         self.btn_toggle_plot.clicked.connect(self.toggle_plot_mode)
         controls_layout.addWidget(self.btn_toggle_plot)
         
-        self.deriv_mix_group = QGroupBox("Derivative Scaling")
+        self.deriv_mix_group = QGroupBox("Derivative Mix (1st vs 2nd)")
         deriv_lay = QVBoxLayout()
-        self.deriv_1st_amp = self.create_slider_row(deriv_lay, "1st Deriv Amp:", 0, 500, 100, 0.01)
-        self.deriv_2nd_amp = self.create_slider_row(deriv_lay, "2nd Deriv Amp:", 0, 500, 100, 0.01)
-        
-        self.chk_show_ea = QCheckBox("Show EA Data on Secondary Y-Axis")
-        self.chk_show_ea.toggled.connect(self.update_plots)
-        deriv_lay.addWidget(self.chk_show_ea)
-        
+        self.deriv_mix = self.create_slider_row(deriv_lay, "1st(0) to 2nd(1):", 0, 100, 50, 0.01)
         self.deriv_mix_group.setLayout(deriv_lay)
         controls_layout.addWidget(self.deriv_mix_group)
         self.deriv_mix_group.setVisible(False)
         
-        self.lbl_results = QLabel("Adjust parameters visually. Watch the Urbach E slider alter the low-energy shoulder.")
+        self.lbl_results = QLabel("Select a temperature below, then adjust parameters or run the optimizer.")
         self.lbl_results.setWordWrap(True)
         controls_layout.addWidget(self.lbl_results)
         controls_layout.addStretch()
@@ -197,6 +316,13 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         right_layout.addWidget(self.canvas)
         
         main_layout.addWidget(right_widget, stretch=2)
+        
+        outer_layout.addWidget(main_widget, stretch=1)
+        
+        # --- Temperature Selector Panel (Bottom) ---
+        self.temp_selector = TemperatureSelectorPanel()
+        self.temp_selector.set_callback(self._on_temperature_selected)
+        outer_layout.addWidget(self.temp_selector)
 
     def create_slider_row(self, parent_layout, label_text, s_min, s_max, s_init, scale):
         row = QHBoxLayout()
@@ -241,36 +367,67 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
             self.get_val(self.step_amp), self.get_val(self.step_eg), self.get_val(self.step_dx)
         ]
 
+    def _load_all_traces(self, metadata):
+        """Use ABSTempProcessor to load all temperature traces from the metadata."""
+        try:
+            from processors.abs_temp_processor import ABSTempProcessor
+            processor = ABSTempProcessor(self.parent_window)
+            settings = metadata.get("analysis_settings", {}).copy()
+            traces = processor._load_traces(metadata, settings=settings)
+            processed = []
+            for i, trace in enumerate(traces):
+                x, y = processor._process_trace(
+                    trace["wavelengths"], trace["absorbance"], settings, i
+                )
+                processed.append({
+                    "x": x,
+                    "y": y,
+                    "label": trace.get("label", f"Trace {i}"),
+                    "value": trace.get("value", 0),
+                })
+            return processed
+        except Exception as e:
+            from utils.app_logger import logger
+            logger.error(f"AbsorptionTempFitterDashboard: Failed to load traces: {e}")
+            return []
+
+    def _on_temperature_selected(self, index):
+        """Called when a temperature button is clicked."""
+        if 0 <= index < len(self.all_traces):
+            self.active_trace_index = index
+            trace = self.all_traces[index]
+            self.x_data = trace["x"]
+            self.y_data = trace["y"]
+            
+            # Update energy range spinboxes to match this trace
+            if self.x_data is not None and len(self.x_data) > 0:
+                self._is_loading = True
+                self.spin_min_e.setValue(float(np.min(self.x_data)))
+                self.spin_max_e.setValue(float(np.max(self.x_data)))
+                self._is_loading = False
+            
+            self.lbl_results.setText(
+                f"Active trace: <b>{trace['label']}</b> — Adjust sliders or run optimizer."
+            )
+            self.update_plots()
+
     def set_active_data(self, x_data: np.ndarray, y_data: np.ndarray, metadata_dict: dict):
         self._is_loading = True
         self.metadata = metadata_dict
-        self.ea_x_data = x_data
-        self.ea_y_data = y_data
-
         
-        try:
-            from processors.factory import get_processor
-            processor = get_processor("Absorption", self.parent_window)
-            
-            data_files = metadata_dict.get("data_files", {}).copy()
-            if "transmission_file" in data_files and "sample_file" not in data_files:
-                data_files["sample_file"] = data_files["transmission_file"]
-            
-            temp_metadata = metadata_dict.copy()
-            temp_metadata["data_files"] = data_files
-            settings = temp_metadata.get("analysis_settings", {})
-            
-            traces = processor._load_traces(temp_metadata, settings=settings)
-            if traces:
-                abs_x = traces[0]["wavelengths"]
-                abs_y = traces[0]["absorbance"]
-                abs_x, abs_y = processor._process_trace(abs_x, abs_y, settings, 0)
-                self.x_data = abs_x
-                self.y_data = abs_y
-            else:
-                self.x_data = x_data
-                self.y_data = y_data
-        except Exception:
+        # Load ALL temperature traces using the ABSTempProcessor
+        self.all_traces = self._load_all_traces(metadata_dict)
+        
+        # Populate the temperature selector
+        self.temp_selector.populate(self.all_traces)
+        
+        if self.all_traces:
+            # Start with the first trace
+            self.active_trace_index = 0
+            self.x_data = self.all_traces[0]["x"]
+            self.y_data = self.all_traces[0]["y"]
+        else:
+            # Fallback: use whatever was passed in
             self.x_data = x_data
             self.y_data = y_data
         
@@ -278,7 +435,7 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
             self.spin_min_e.setValue(float(np.min(self.x_data)))
             self.spin_max_e.setValue(float(np.max(self.x_data)))
             
-        saved_data = self.metadata.get("analysis_settings", {}).get("ea_absorption_fitter_data")
+        saved_data = self.metadata.get("analysis_settings", {}).get("abs_temp_fitter_data")
         if saved_data:
             if "min_e" in saved_data:
                 self.spin_min_e.setValue(saved_data["min_e"])
@@ -323,13 +480,12 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         p1_on, a1, c1, w1, e1, eu1, p2_on, a2, c2, w2, e2, eu2, m, b, bg_amp, eg, dx = params
 
         self.canvas.axes.cla()
-        if hasattr(self, 'ax2') and self.ax2 is not None:
-            try:
-                self.ax2.remove()
-            except Exception:
-                pass
-            self.ax2 = None
-            
+        
+        # Build title from active trace label
+        active_label = ""
+        if self.all_traces and 0 <= self.active_trace_index < len(self.all_traces):
+            active_label = self.all_traces[self.active_trace_index].get("label", "")
+        
         if self.plot_mode == "standard":
             self.canvas.axes.plot(self.x_data, self.y_data, color='lightgray', label='Full Dataset')
             if np.any(mask):
@@ -350,6 +506,8 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
             self.canvas.axes.set_xlabel("Energy (eV)")
             self.canvas.axes.set_ylabel("Absorption (OD)")
             self.canvas.axes.set_xlim(min_e - 0.02, max_e + 0.02)
+            if active_label:
+                self.canvas.axes.set_title(f"ABS Fit — {active_label}", fontsize=10)
             self.canvas.axes.legend(loc='upper right')
         else:
             x_smooth = np.linspace(min_e, max_e, 700)
@@ -365,60 +523,18 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
             dy_norm = dy / max_dy if max_dy != 0 else dy
             d2y_norm = d2y / max_d2y if max_d2y != 0 else d2y
             
-            amp1 = self.get_val(self.deriv_1st_amp)
-            amp2 = self.get_val(self.deriv_2nd_amp)
+            mix_val = self.get_val(self.deriv_mix)
+            combined = (1.0 - mix_val) * dy_norm + mix_val * d2y_norm
             
-            combined = amp1 * dy_norm + amp2 * d2y_norm
-            
-            self.canvas.axes.plot(x_smooth, amp1 * dy_norm, 'b--', alpha=0.5, label='1st Deriv')
-            self.canvas.axes.plot(x_smooth, amp2 * d2y_norm, 'g--', alpha=0.5, label='2nd Deriv')
-            self.canvas.axes.plot(x_smooth, combined, 'r-', linewidth=2.5, label=f'Mixed')
+            self.canvas.axes.plot(x_smooth, dy_norm, 'b--', alpha=0.5, label='1st Deriv (Norm)')
+            self.canvas.axes.plot(x_smooth, d2y_norm, 'g--', alpha=0.5, label='2nd Deriv (Norm)')
+            self.canvas.axes.plot(x_smooth, combined, 'r-', linewidth=2.5, label=f'Mixed ({1-mix_val:.2f} : {mix_val:.2f})')
             self.canvas.axes.set_xlabel("Energy (eV)")
-            self.canvas.axes.set_ylabel("Derivative Signal (Arbitrary)")
+            self.canvas.axes.set_ylabel("Derivative Signal (Normalized)")
             self.canvas.axes.set_xlim(min_e - 0.02, max_e + 0.02)
-            
-            if self.chk_show_ea.isChecked() and hasattr(self, 'ea_x_data') and self.ea_x_data is not None:
-                self.ax2 = self.canvas.axes.twinx()
-                self.ax2.plot(self.ea_x_data, self.ea_y_data, color='gray', alpha=0.6, label='EA Data')
-                self.ax2.set_ylabel("EA Data", color='gray')
-                self.ax2.tick_params(axis='y', labelcolor='gray')
-                
-                # Align zeros
-                y1_min, y1_max = self.canvas.axes.get_ylim()
-                y2_min, y2_max = self.ax2.get_ylim()
-                
-                y1_min = min(y1_min, -1e-6)
-                y2_min = min(y2_min, -1e-6)
-                y1_max = max(y1_max, 1e-6)
-                y2_max = max(y2_max, 1e-6)
-                
-                self.canvas.axes.set_ylim(y1_min, y1_max)
-                self.ax2.set_ylim(y2_min, y2_max)
-
-                ratio1 = y1_max / -y1_min
-                ratio2 = y2_max / -y2_min
-                
-                if ratio1 > ratio2:
-                    self.ax2.set_ylim(top=-y2_min * ratio1)
-                else:
-                    self.canvas.axes.set_ylim(top=-y1_min * ratio2)
-                    
-                y1_min, y1_max = self.canvas.axes.get_ylim()
-                y2_min, y2_max = self.ax2.get_ylim()
-                
-                ratio1_neg = -y1_min / y1_max
-                ratio2_neg = -y2_min / y2_max
-                
-                if ratio1_neg > ratio2_neg:
-                    self.ax2.set_ylim(bottom=-y2_max * ratio1_neg)
-                else:
-                    self.canvas.axes.set_ylim(bottom=-y1_max * ratio2_neg)
-
-                lines_1, labels_1 = self.canvas.axes.get_legend_handles_labels()
-                lines_2, labels_2 = self.ax2.get_legend_handles_labels()
-                self.canvas.axes.legend(lines_1 + lines_2, labels_1 + labels_2, loc='upper right')
-            else:
-                self.canvas.axes.legend(loc='upper right')
+            if active_label:
+                self.canvas.axes.set_title(f"ABS Derivatives — {active_label}", fontsize=10)
+            self.canvas.axes.legend(loc='upper right')
             
         self.canvas.draw()
         
@@ -432,7 +548,7 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         if "analysis_settings" not in self.metadata:
             self.metadata["analysis_settings"] = {}
             
-        self.metadata["analysis_settings"]["ea_absorption_fitter_data"] = {
+        self.metadata["analysis_settings"]["abs_temp_fitter_data"] = {
             "min_e": self.spin_min_e.value(),
             "max_e": self.spin_max_e.value(),
             "params": self.gather_all_parameters()
@@ -495,13 +611,17 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
                            eval_map[10], eval_map[11], eval_map[12], eval_map[13], eval_map[14]]
             return evaluate_total_model(x, full_params)
 
+        active_label = ""
+        if self.all_traces and 0 <= self.active_trace_index < len(self.all_traces):
+            active_label = self.all_traces[self.active_trace_index].get("label", "")
+
         try:
             popt, _ = curve_fit(scikit_fitting_target, x_fit, y_fit, p0=p0_free, bounds=(bounds_low, bounds_high))
             
             for name, opt_val in zip(free_names, popt):
                 self.set_val(widgets[all_keys.index(name)], opt_val)
 
-            summary = "<b>Fit Complete! Key Structural Parameters:</b><br>"
+            summary = f"<b>Fit Complete [{active_label}]!</b><br>"
             if p1_on:
                 summary += f"Peak 1: E={self.get_val(self.p1_cen):.3f} eV, <b>Urbach Energy (Eu) = {self.get_val(self.p1_eu)*1000:.1f} meV</b><br>"
             if p2_on:
@@ -517,3 +637,4 @@ class EAAbsorptionFitterDashboard(BaseModelingDashboard):
         self.canvas.axes.cla()
         self.x_data = None
         self.y_data = None
+        self.all_traces = []

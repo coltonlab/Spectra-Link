@@ -1,5 +1,5 @@
 from pathlib import Path
-from PyQt6.QtWidgets import QTableWidgetItem, QDoubleSpinBox, QLineEdit, QPlainTextEdit
+from PyQt6.QtWidgets import QTableWidgetItem, QDoubleSpinBox, QLineEdit, QPlainTextEdit, QComboBox
 from PyQt6.QtGui import QBrush, QColor
 from PyQt6.QtCore import Qt
 from config.techniques import TECHNIQUE_CONFIG
@@ -38,6 +38,8 @@ class DiscoveryDataMapper:
             if isinstance(widget, QDoubleSpinBox):
                 try: widget.setValue(float(val))
                 except (ValueError, TypeError): pass
+            elif isinstance(widget, QComboBox):
+                widget.setCurrentText(str(val))
             elif isinstance(widget, QLineEdit):
                 widget.setText(str(val))
 
@@ -125,7 +127,12 @@ class DiscoveryDataMapper:
         # 1. Update Parameters
         params = data.setdefault("parameters", {})
         for k, w in tab._param_widgets.items():
-            params[k] = w.value() if isinstance(w, QDoubleSpinBox) else w.text()
+            if isinstance(w, QDoubleSpinBox):
+                params[k] = w.value()
+            elif isinstance(w, QComboBox):
+                params[k] = w.currentText()
+            else:
+                params[k] = w.text()
 
         # 2. Rebuild data_files structure
         df = {"none_files": []}

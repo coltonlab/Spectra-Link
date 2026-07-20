@@ -249,6 +249,41 @@ TECHNIQUE_CONFIG = {
             "legend_label",
         ],
     },
+
+    # ── Impedance Calibration ─────────────────────────────────────────────────
+    "Impedance Calibration": {
+        "badge_color":      "#4a3a1e",
+        "badge_text_color": "#f0e6d5",
+        "scan_types": ["None", "Open", "Short", "Load", "Known Load", "Sample"],
+        "json_key_map": {
+            "Open":       "open_file",
+            "Short":      "short_file",
+            "Load":       "load_file",
+            "Known Load": "known_load_file",
+            "Sample":     "sample_file",
+            "None":       "none_files",
+        },
+        "global_params": [
+            {
+                "key": "author", "label": "Author", "type": "text", "default": "",
+            },
+            {
+                "key": "circuit_model", "label": "Circuit Model", "type": "combo",
+                "options": ["Parallel", "Series"], "default": "Parallel",
+            },
+        ],
+        "local_param": None,
+        "analysis_options": [
+            "show_open_scan",
+            "show_short_scan",
+            "show_load_scan",
+            "show_known_load_scan",
+            "show_sample_scan",
+            "show_legend",
+            "line_width",
+            "trace_color",
+        ],
+    },
 }
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -260,6 +295,10 @@ SCAN_TYPE_COLORS = {
     "Voltage":      ("#4a3a1e", "#f0e6d5"),  # Soft Gold/Tan
     "Background":   ("#1e3a4a", "#d5e4f0"),  # Soft Deep Blue
     "Sample":       ("#2b3d5c", "#d5e1f0"),  # Soft Blue
+    "Open":         ("#4a2a1a", "#e3a87e"),
+    "Short":        ("#1a4a2a", "#7ee3a8"),
+    "Load":         ("#1a4a6a", "#7ec8e3"),
+    "Known Load":   ("#4a1a4a", "#e37ee3"),
     "None":         ("#2a2a2a", "#f3f2f2"),  # Dark Gray / Light Gray
 }
 
@@ -471,5 +510,35 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "label":   "Overlay Absorption",
         "tooltip": "Calculate ground-state absorbance from Blank/Transmission and plot on a secondary axis behind EA",
         "category": "Visualization",
+    },
+    "show_open_scan": {
+        "label":   "Show Open Scan",
+        "tooltip": "Toggle the display of the Open scan",
+        "category": "Scans",
+        "default": True,
+    },
+    "show_short_scan": {
+        "label":   "Show Short Scan",
+        "tooltip": "Toggle the display of the Short scan",
+        "category": "Scans",
+        "default": True,
+    },
+    "show_load_scan": {
+        "label":   "Show Load Scan",
+        "tooltip": "Toggle the display of the Load scan",
+        "category": "Scans",
+        "default": True,
+    },
+    "show_known_load_scan": {
+        "label":   "Show Known Load Scan",
+        "tooltip": "Toggle the display of the Known Load scan",
+        "category": "Scans",
+        "default": True,
+    },
+    "show_sample_scan": {
+        "label":   "Show Sample Scan",
+        "tooltip": "Toggle the display of the Sample scan",
+        "category": "Scans",
+        "default": True,
     },
 }

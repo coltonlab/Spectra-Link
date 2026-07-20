@@ -45,10 +45,15 @@ def read_data_simple(file_path):
         # Detect if we have 2 lock-ins or 1
         if "X810 (V)" in first_chunk:
             is_double = True
-            header_str = "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)"
+            header_str = "Digikrom Spectr.:0 (?)\tX810 (V)\tY810 (V)\tR810 (V)\tX830 (V)\tY830 (V)\tR830 (V)"
             logger.info(f"Detected 2 lock-ins in file: {file_path}")
-        elif "X (V)" in first_chunk:
-            header_str = "Digikrom Spectr.:0 (?)	X (V)	Y (V)	R (V)"
+        elif "X (V)" in first_chunk and "Digikrom" in first_chunk:
+            header_str = "Digikrom Spectr.:0 (?)\tX (V)\tY (V)\tR (V)"
+        elif "F (Hz)" in first_chunk and "Z" in first_chunk:
+            # Look for exact F (Hz) line if possible, or just provide the known string
+            # Based on the image, headers are separated by tabs or spaces.
+            # We'll let read_data_with_dynamic_header find the line containing F (Hz)
+            header_str = "F (Hz)"
         else:
             # Fallback for other data types (like PMT or CCD)
             header_str = None 

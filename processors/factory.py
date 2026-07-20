@@ -16,6 +16,7 @@ def get_processor(tech: str, parent_window):
         "absorption": ("processors.abs_processor", "ABSProcessor"),
         "abs temp series": ("processors.abs_temp_processor", "ABSTempProcessor"),
         "ea temp series": ("processors.ea_temp_processor", "EATempProcessor"),
+        "impedance calibration": ("processors.impedance_calibration_processor", "ImpedanceCalibrationProcessor"),
     }
 
     for key, (module_path, class_name) in mapping.items():

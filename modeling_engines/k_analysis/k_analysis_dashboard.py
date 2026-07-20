@@ -123,8 +123,8 @@ if __name__ == "__main__":
     win.setCentralWidget(dash)
 
     # filepath = "Data/AFRL Compiled EA Data/(R)-((3-Br)MBA)_2 PbI_4 EA_series_data_16K.csv"
-    filepath = "Data/AFRL Compiled EA Data/(R)-((3-Cl)MBA)_2 PbI_4 EA_series_data_16K.csv"
-    # filepath = "Data/AFRL Compiled EA Data/(R)-((3-I)MBA)_2 PbI_4 EA_series_data_16K.csv"
+    # filepath = "Data/AFRL Compiled EA Data/(R)-((3-Cl)MBA)_2 PbI_4 EA_series_data_16K.csv"
+    filepath = "Data/AFRL Compiled EA Data/(R)-((3-I)MBA)_2 PbI_4 EA_series_data_16K.csv"
     # filepath = "Data/AFRL Compiled EA Data/(R)-((3-CF_3)MBA)_2 PbI_4 EA_series_data_16K.csv"
     df = pd.read_csv(filepath)
 
