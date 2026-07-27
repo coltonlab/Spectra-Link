@@ -1,0 +1,37 @@
+{
+    "data_file_path": "C:/Users/carterms/OneDrive - Brigham Young University/Documents/Research/Spectra-Link/Data/AFRL Compiled EA Data/(R)-((3-I)MBA)_2 PbI_4 EA_series_data_16K.csv",
+    "invert_phase": true,
+    "show_windows": false,
+    "show_peaks": true,
+    "feature_windows": {
+        "d": [
+            2.77,
+            2.81
+        ],
+        "e": [
+            2.805,
+            2.83
+        ],
+        "f": [
+            2.8150000000000004,
+            2.8600000000000003
+        ],
+        "g": [
+            2.8500000000000005,
+            2.8800000000000003
+        ],
+        "h": [
+            2.8750000000000004,
+            2.94
+        ]
+    },
+    "active_voltages": {
+        "20.0": true,
+        "30.0": true,
+        "40.0": true,
+        "50.0": true,
+        "60.0": true,
+        "70.0": true,
+        "80.0": true
+    }
+}

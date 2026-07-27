@@ -1,0 +1,29 @@
+{
+    "data_file_path": "C:/Users/carterms/OneDrive - Brigham Young University/Documents/Research/Spectra-Link/Data/EA_Export_Intermediate #1 B1_EA 16K.csv",
+    "invert_phase": false,
+    "show_windows": true,
+    "show_peaks": true,
+    "feature_windows": {
+        "d": [
+            2.77,
+            2.82
+        ],
+        "e": [
+            2.82,
+            2.835
+        ],
+        "f": [
+            2.835,
+            2.865
+        ],
+        "g": [
+            2.875,
+            2.895
+        ],
+        "h": [
+            2.88,
+            2.925
+        ]
+    },
+    "active_voltages": {}
+}
