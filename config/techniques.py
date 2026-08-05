@@ -254,13 +254,14 @@ TECHNIQUE_CONFIG = {
     "Impedance Calibration": {
         "badge_color":      "#4a3a1e",
         "badge_text_color": "#f0e6d5",
-        "scan_types": ["None", "Open", "Short", "Load", "Known Load", "Sample"],
+        "scan_types": ["None", "Open", "Short", "Load", "Known Load", "Sample", "Sample 2"],
         "json_key_map": {
             "Open":       "open_file",
             "Short":      "short_file",
             "Load":       "load_file",
             "Known Load": "known_load_file",
             "Sample":     "sample_file",
+            "Sample 2":   "sample2_file",
             "None":       "none_files",
         },
         "global_params": [
@@ -279,6 +280,9 @@ TECHNIQUE_CONFIG = {
             "show_load_scan",
             "show_known_load_scan",
             "show_sample_scan",
+            "show_sample2_scan",
+            "show_calibrated_sample_scan",
+            "impedance_display_mode",
             "show_legend",
             "line_width",
             "trace_color",
@@ -299,6 +303,7 @@ SCAN_TYPE_COLORS = {
     "Short":        ("#1a4a2a", "#7ee3a8"),
     "Load":         ("#1a4a6a", "#7ec8e3"),
     "Known Load":   ("#4a1a4a", "#e37ee3"),
+    "Sample 2":     ("#5a3a1e", "#f0b27e"),
     "None":         ("#2a2a2a", "#f3f2f2"),  # Dark Gray / Light Gray
 }
 
@@ -540,5 +545,25 @@ ANALYSIS_OPTION_META: dict[str, dict] = {
         "tooltip": "Toggle the display of the Sample scan",
         "category": "Scans",
         "default": True,
+    },
+    "show_sample2_scan": {
+        "label":   "Show Sample 2 Scan",
+        "tooltip": "Toggle the display of the Sample 2 scan",
+        "category": "Scans",
+        "default": True,
+    },
+    "show_calibrated_sample_scan": {
+        "label":   "Show Calibrated Sample Scan",
+        "tooltip": "Display the calibrated sample impedance derived from the complex impedance equation",
+        "category": "Scans",
+        "default": False,
+    },
+    "impedance_display_mode": {
+        "label":   "Plot Mode",
+        "tooltip": "Choose whether impedance or calculated capacitance is shown in the impedance dashboard.",
+        "category": "Display",
+        "type":    "combo",
+        "options": ["Impedance", "Capacitance"],
+        "default": "Impedance",
     },
 }

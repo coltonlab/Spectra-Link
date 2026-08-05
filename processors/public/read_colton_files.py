@@ -273,8 +273,23 @@ def read_data_simple(file_path):
 '''
 This function reads in the data by looking at the "Digikrom Spectr.:0 (?)	X810 (V)	Y810 (V)	R810 (V)	X830 (V)	Y830 (V)	R830 (V)" before the data headers
 '''
+def _detect_delimiter(file_path):
+    with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
+        for line in f:
+            if not line.strip():
+                continue
+            if "," in line and "\t" not in line:
+                return ","
+            if "\t" in line:
+                return "\t"
+            break
+    return ","
+
+
 def read_data_with_dynamic_header(file_path, header):
     header_index = None
+    delimiter = _detect_delimiter(file_path)
+
     # Efficiently find the header without loading the whole file into strings
     with open(file_path, "r", encoding="latin-1", errors="ignore") as f:
         for i, line in enumerate(f):
@@ -286,8 +301,7 @@ def read_data_with_dynamic_header(file_path, header):
         raise ValueError("Could not find header row")
 
     # Read the data into a DataFrame, skipping unnecessary lines
-    # Using 'c' engine instead of 'python' is significantly faster for large files
-    df = pd.read_csv(file_path, skiprows=header_index, sep='\t', dtype=np.float64, engine='python', skipfooter=3)
+    df = pd.read_csv(file_path, skiprows=header_index, sep=delimiter, dtype=np.float64, engine='python', skipfooter=3)
     return df
 
 # '''

@@ -112,6 +112,7 @@ class SpectraLink(QMainWindow):
         # ── Signals ───────────────────────────────────────────────────────────
         self.sidebar.experimentChanged.connect(self._on_exp_changed)
         self.tabs.currentChanged.connect(self._on_tab_changed)
+        self.experimentDataChanged.connect(self.modeling_tab.refresh_from_session)
 
         self.sidebar.update_root()
         self.apply_theme()

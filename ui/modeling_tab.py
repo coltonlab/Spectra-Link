@@ -54,11 +54,12 @@ class ModelingTab(QWidget):
 
     def refresh_from_session(self):
         """
-        Called when the session changes. Updates the model list but does NOT load a model.
+        Called when the session changes. Rebuilds the data context and refreshes the active dashboard.
         """
-        from utils.project_manager import ProjectManager
-        from utils.project_manager import Session # Explicitly import the Session instance/class
+        from utils.project_manager import Session
+
         data = Session.get_data()
+        previous_dashboard_class = type(self._current_dashboard) if self._current_dashboard is not None else None
 
         # Clear UI if no data
         if not data:
@@ -67,27 +68,51 @@ class ModelingTab(QWidget):
             return
 
         tech = data.get("core", {}).get("technique")
-        
+
         # ── Data Handshake ──────────────────────────────────────────────────
         # Use the processor to get the actual processed data from the session
         processor = get_processor(tech, self.parent_window)
         try:
-            raw_traces = processor._load_traces(data)
-            if raw_traces:
-                settings = data.get("analysis_settings", {})
-                # Determine primary data key (ea for EA series, absorbance for ABS)
-                d_key = "ea" if "ea" in raw_traces[0] else "absorbance"
-                x, y = processor._process_trace(raw_traces[0]["wavelengths"], raw_traces[0][d_key], settings, 0)
-                self._active_data_context = {"x": x, "y": y, "meta": data}
+            settings = data.get("analysis_settings", {})
+            # For modeling we want all raw traces available (including hidden scans)
+            if tech == "Impedance Calibration":
+                # Force visibility for all scan types so calibrated sample is generated
+                settings_all = dict(settings)
+                for key in ("show_open_scan", "show_short_scan", "show_load_scan", "show_known_load_scan", "show_sample_scan", "show_sample2_scan", "show_calibrated_sample_scan"):
+                    settings_all[key] = True
+                try:
+                    raw_traces = processor._load_traces_custom(data, settings_all)
+                except Exception:
+                    raw_traces = processor._load_traces(data)
+
+                if raw_traces:
+                    self._active_data_context = {
+                        "x": None,
+                        "y": None,
+                        "meta": {
+                            "core": data.get("core", {}),
+                            "analysis_settings": settings,
+                            "trace_data": raw_traces,
+                        },
+                    }
+                else:
+                    self._active_data_context = {"x": None, "y": None, "meta": data}
             else:
-                self._active_data_context = {"x": None, "y": None, "meta": data}
+                raw_traces = processor._load_traces(data)
+                if raw_traces:
+                    # Determine primary data key (ea for EA series, absorbance for ABS)
+                    d_key = "ea" if "ea" in raw_traces[0] else "absorbance"
+                    x, y = processor._process_trace(raw_traces[0]["wavelengths"], raw_traces[0][d_key], settings, 0)
+                    self._active_data_context = {"x": x, "y": y, "meta": data}
+                else:
+                    self._active_data_context = {"x": None, "y": None, "meta": data}
         except Exception as e:
             logger.error(f"ModelingTab: Failed to prepare data context: {e}")
             self._active_data_context = {"x": None, "y": None, "meta": data}
 
         # Update the model selection list
         self._available_classes = MODELING_REGISTRY.get(tech, [])
-        
+
         self.model_selector.blockSignals(True)
         self.model_selector.clear()
         self.model_selector.addItem("None (Select a tool to begin)")
@@ -96,8 +121,11 @@ class ModelingTab(QWidget):
         self.model_selector.setCurrentIndex(0)
         self.model_selector.blockSignals(False)
 
-        # Clear the stage (so it doesn't run a model on start up)
-        self.load_modeling_dashboard(None, None, None, {})
+        if previous_dashboard_class is not None:
+            self.load_modeling_dashboard(previous_dashboard_class, None, None, self._active_data_context["meta"])
+        else:
+            # Clear the stage (so it doesn't run a model on start up)
+            self.load_modeling_dashboard(None, None, None, {})
 
     def _on_model_selection_changed(self, index):
         """Triggered when the user picks a specific engine from the dropdown."""

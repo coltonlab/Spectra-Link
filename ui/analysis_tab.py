@@ -85,7 +85,7 @@ class AnalysisTab(QWidget):
         self.btn_export = QPushButton("📤  Export Data")
         self.btn_export.setStyleSheet("padding: 5px 12px;")
         self.btn_export.clicked.connect(self.export_processed_data)
-        
+
         # Get the panel's palette for consistent accent color
         is_dark = getattr(self.parent_window, "dark_mode", True)
         C = _palette(is_dark)
@@ -229,8 +229,14 @@ class AnalysisTab(QWidget):
     # Public alias used by external callers in the original code
     def update_setting(self, key: str, value):
         self._on_setting_changed(key, value)
+
     def _on_option_toggled(self, key: str, checked: bool):
         self._on_setting_changed(key, checked)
+
+    def _on_canvas_click(self, event):
+        """Handle right-click context menu on the plot."""
+        if event.button == 3:  # Right click
+            self._show_context_menu(event)
 
     def _on_canvas_click(self, event):
         """Handle right-click context menu on the plot."""

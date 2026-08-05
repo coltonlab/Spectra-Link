@@ -1,30 +1,32 @@
 import numpy as np
 
-def calculate_true_z(z_raw, phi_deg, is_series_mode):
-    """
-    Applies math conversions to get the true Z value (Impedance).
-    In series mode, Z is actually Y (Admittance).
-    Y = Y_mag * exp(j * Phi)
-    Z_true = 1 / Y.
-    Returns: True Z magnitude and True Phi in degrees.
-    """
-    # z_raw could be a pandas Series or numpy array
-    z_raw = np.array(z_raw, dtype=float)
-    phi_deg = np.array(phi_deg, dtype=float)
 
-    if not is_series_mode:
-        return z_raw, phi_deg
-    
-    # In series mode, z_raw is actually Y magnitude, and phi_deg is Y phase.
-    # Z_true = 1 / Y
-    # Magnitude of Z = 1 / Magnitude of Y
-    # Phase of Z = - Phase of Y
-    
-    # Avoid division by zero
-    z_true_mag = np.zeros_like(z_raw)
-    valid = (z_raw != 0) & (~np.isnan(z_raw))
-    z_true_mag[valid] = 1.0 / z_raw[valid]
-    
-    z_true_phi = -phi_deg
-    
-    return z_true_mag, z_true_phi
+def calculate_true_z(real_raw, imag_raw, is_series_mode):
+    """
+    Convert raw impedance/admittance components into the true impedance magnitude,
+    phase, and real/imaginary parts.
+
+    In series mode, the inputs are treated as series impedance components: Z = R + jX.
+    In parallel mode, the inputs are treated as admittance components: Y = G + jB,
+    and the equivalent impedance is recovered as Z = 1 / Y using the complex conjugate.
+    """
+    real_vals = np.array(real_raw, dtype=float)
+    imag_vals = np.array(imag_raw, dtype=float)
+
+    z_complex = np.zeros(real_vals.shape, dtype=np.complex128)
+    valid = (~np.isnan(real_vals)) & (~np.isnan(imag_vals))
+
+    if is_series_mode:
+        z_complex[valid] = real_vals[valid] + 1j * imag_vals[valid]
+    else:
+        denom = real_vals**2 + imag_vals**2
+        parallel_valid = valid & (denom != 0)
+        if np.any(parallel_valid):
+            z_complex[parallel_valid] = (real_vals[parallel_valid] - 1j * imag_vals[parallel_valid]) / denom[parallel_valid]
+
+    z_true_mag = np.abs(z_complex)
+    z_true_phi = np.degrees(np.angle(z_complex))
+    z_true_real = np.real(z_complex)
+    z_true_imag = np.imag(z_complex)
+
+    return z_true_mag, z_true_phi, z_true_real, z_true_imag
