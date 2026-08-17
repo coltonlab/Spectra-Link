@@ -27,6 +27,54 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
 
         return None
 
+    DEFAULT_TRACE_COLORS = {
+        "Open": "black",
+        "Short": "black",
+        "Load": "green",
+        "Known Load": "red",
+        "Sample": "blue",
+        "Sample 2": "brown",
+        "Calibrated Sample": "black",
+    }
+
+    @classmethod
+    def _get_trace_color_and_alpha(cls, scan_type, settings=None):
+        settings = settings or {}
+        key_base = scan_type.lower().replace(" ", "_")
+        key_base_no_underscore = scan_type.lower().replace(" ", "")
+
+        default_color = cls.DEFAULT_TRACE_COLORS.get(scan_type, "black")
+        default_alpha = 0.7
+
+        scan_colors = settings.get("scan_colors") or settings.get("colors") or {}
+        color = (
+            settings.get(f"{key_base}_color") or
+            settings.get(f"{key_base_no_underscore}_color") or
+            settings.get(f"{scan_type}_color") or
+            scan_colors.get(scan_type) or
+            default_color
+        )
+
+        scan_alphas = settings.get("scan_alphas") or settings.get("alphas") or {}
+        alpha_val = None
+        for k in [f"{key_base}_alpha", f"{key_base_no_underscore}_alpha", f"{scan_type}_alpha"]:
+            if k in settings:
+                alpha_val = settings[k]
+                break
+
+        if alpha_val is None:
+            alpha_val = scan_alphas.get(scan_type)
+
+        if alpha_val is None:
+            alpha = default_alpha
+        else:
+            try:
+                alpha = float(alpha_val)
+            except (ValueError, TypeError):
+                alpha = default_alpha
+
+        return color, alpha
+
     def _load_traces(self, json_data, settings=None):
         """Load scans from the current experiment JSON."""
         return self._load_traces_custom(json_data, settings)
@@ -131,12 +179,21 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
                 imag_key = self._find_column(data_dict, ("X", "X (Ohm)", "X (Ω)", "Reactance"))
 
             if f_key and real_key and imag_key:
-                f_vals = data_dict[f_key]
-                real_vals = data_dict[real_key]
-                imag_vals = data_dict[imag_key]
+                f_vals = np.asarray(data_dict[f_key], dtype=np.float64)
+                real_vals = np.asarray(data_dict[real_key], dtype=np.float64)
+                imag_vals = np.asarray(data_dict[imag_key], dtype=np.float64)
+
+                f_min = settings.get("min_frequency", 0.0)
+                f_max = settings.get("max_frequency", 1000000000.0)
+                mask = (f_vals >= f_min) & (f_vals <= f_max)
+
+                f_vals = f_vals[mask]
+                real_vals = real_vals[mask]
+                imag_vals = imag_vals[mask]
 
                 z_true, phi_true, z_real, z_imag = calculate_true_z(real_vals, imag_vals, is_series_mode)
 
+                color, alpha = self._get_trace_color_and_alpha(scan_type, settings)
                 trace = {
                     "type": scan_type,
                     "f": f_vals,
@@ -144,7 +201,9 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
                     "phi": phi_true,
                     "z_real": z_real,
                     "z_imag": z_imag,
-                    "label": f"{scan_type} Scan"
+                    "label": f"{scan_type} Scan",
+                    "color": color,
+                    "alpha": alpha,
                 }
                 trace_by_type[scan_type] = trace
                 if should_plot:
@@ -175,6 +234,7 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
                 )
                 z_true, phi_true, z_real, z_imag = self._complex_trace_components(calibrated_complex)
 
+                color, alpha = self._get_trace_color_and_alpha("Calibrated Sample", settings)
                 traces.append({
                     "type": "Calibrated Sample",
                     "f": sample_trace["f"],
@@ -182,7 +242,9 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
                     "phi": phi_true,
                     "z_real": z_real,
                     "z_imag": z_imag,
-                    "label": "Calibrated Sample Scan"
+                    "label": "Calibrated Sample Scan",
+                    "color": color,
+                    "alpha": alpha,
                 })
             else:
                 logger.warning("Skipping calibrated sample trace because one or more required scans were not loaded.")
@@ -203,19 +265,18 @@ class ImpedanceCalibrationProcessor(BaseProcessor):
 
             lw = settings.get("line_width", 1.5)
             mode = settings.get("impedance_display_mode", "Impedance")
-            # Default line style is solid
             
-            # Use specific colors for scan types if available
             for trace in traces:
                 scan_type = trace["type"]
-                color_tuple = SCAN_TYPE_COLORS.get(scan_type, ("black", "gray"))
-                
-                # Check for dark mode to select appropriate color
-                is_dark = getattr(self.parent_window, "dark_mode", True)
-                color = color_tuple[1] if is_dark else color_tuple[0]
+                color = trace.get("color")
+                alpha = trace.get("alpha")
+                if color is None or alpha is None:
+                    c, a = self._get_trace_color_and_alpha(scan_type, settings)
+                    color = color or c
+                    alpha = alpha or a
 
                 y_vals = self._get_plot_values(trace, settings)
-                ax.plot(trace["f"], y_vals, linewidth=lw, label=trace["label"], color=color)
+                ax.plot(trace["f"], y_vals, linewidth=lw, label=trace["label"], color=color, alpha=alpha)
 
             ax.set_xscale('log')
             ax.set_yscale('log' if mode == "Impedance" else 'linear')

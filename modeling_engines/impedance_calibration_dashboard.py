@@ -3,20 +3,22 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QCheckBox, QComboBox,
-    QPushButton, QLabel, QSizePolicy, QFrame, QDoubleSpinBox
+    QPushButton, QLabel, QSizePolicy, QFrame, QDoubleSpinBox,
+    QButtonGroup
 )
 from PyQt6.QtCore import Qt
 
 from modeling_engines.base_modeling_dashboard import BaseModelingDashboard
-from config.techniques import SCAN_TYPE_COLORS
+from config.techniques import SCAN_TYPE_COLORS, TRACE_COLORS
 from utils.app_logger import logger
 
 
 class ImpedanceCalibrationDashboard(BaseModelingDashboard):
     """
     Modeling dashboard for impedance calibration experiments.
-    Provides controls to toggle individual impedance traces and plot percent error
-    between two selected traces.
+    Provides controls to toggle individual impedance traces, switch between
+    Impedance and Capacitance plot modes, and plot percent error between two
+    selected traces based on whatever is currently being displayed.
     """
 
     TRACE_TYPES = [
@@ -34,14 +36,57 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         self.traces = []
         self.metadata = {}
         self._active_plot = None
+        # Current display mode: "Impedance" or "Capacitance"
+        self._display_mode = "Impedance"
         self.build_ui()
+
+    # ── helpers ────────────────────────────────────────────────────────────────
+
+    def _get_y_vals(self, trace: dict, freq_vals: np.ndarray) -> np.ndarray:
+        """Return y-values for a trace based on the current display mode."""
+        if self._display_mode == "Capacitance":
+            z_imag_vals = np.asarray(
+                trace.get("z_imag", np.zeros_like(freq_vals, dtype=np.float64)),
+                dtype=np.float64,
+            )
+            y_vals = np.full_like(z_imag_vals, np.nan, dtype=np.float64)
+            valid = (
+                (freq_vals != 0)
+                & (z_imag_vals != 0)
+                & np.isfinite(freq_vals)
+                & np.isfinite(z_imag_vals)
+            )
+            y_vals[valid] = 1.0 / (2.0 * np.pi * freq_vals[valid] * z_imag_vals[valid])
+            return y_vals
+        # Impedance mode
+        if "z" in trace and trace["z"] is not None:
+            return np.asarray(trace["z"], dtype=np.float64)
+        z_complex = np.asarray(trace.get("z_real", 0.0), dtype=np.complex128) + 1j * np.asarray(
+            trace.get("z_imag", 0.0), dtype=np.complex128
+        )
+        return np.abs(z_complex)
+
+    def _apply_freq_mask(self, freq_vals: np.ndarray, y_vals: np.ndarray):
+        """Apply the min/max frequency filter and return (masked_freq, masked_y)."""
+        min_freq = self.min_freq_spin.value() if self.min_freq_spin.value() > 0 else None
+        max_freq = self.max_freq_spin.value() if self.max_freq_spin.value() > 0 else None
+        if min_freq is None and max_freq is None:
+            return freq_vals, y_vals
+        mask = np.ones(len(freq_vals), dtype=bool)
+        if min_freq is not None:
+            mask &= freq_vals >= min_freq
+        if max_freq is not None:
+            mask &= freq_vals <= max_freq
+        return freq_vals[mask], y_vals[mask]
+
+    # ── UI construction ────────────────────────────────────────────────────────
 
     def build_ui(self):
         self.setLayout(QHBoxLayout())
         self.layout().setContentsMargins(8, 8, 8, 8)
         self.layout().setSpacing(12)
 
-        # Left: Plot area
+        # ── Left: Plot area ────────────────────────────────────────────────────
         plot_frame = QVBoxLayout()
         self.figure = Figure(layout="constrained", facecolor="white")
         self.canvas = FigureCanvas(self.figure)
@@ -51,7 +96,7 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet("color: gray;")
 
-        # Footer area: status on left, average percent-error on right
+        # Footer: status on left, average percent-error on right
         footer = QFrame()
         footer.setLayout(QHBoxLayout())
         footer.layout().setContentsMargins(0, 0, 0, 0)
@@ -67,21 +112,82 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         plot_frame.addWidget(self.canvas, stretch=1)
         plot_frame.addWidget(footer)
 
-        # Right: Controls
+        # ── Right: Controls ────────────────────────────────────────────────────
         control_frame = QFrame()
         control_frame.setLayout(QVBoxLayout())
         control_frame.layout().setContentsMargins(0, 0, 0, 0)
         control_frame.layout().setSpacing(8)
 
-        control_frame.layout().addWidget(QLabel("<b>Trace Visibility</b>"))
+        # ---- Plot Mode Toggle ------------------------------------------------
+        control_frame.layout().addWidget(QLabel("<b>Plot Mode</b>"))
+
+        mode_row = QHBoxLayout()
+        self.btn_impedance = QPushButton("Impedance")
+        self.btn_impedance.setCheckable(True)
+        self.btn_impedance.setChecked(True)
+        self.btn_impedance.setToolTip("Display raw impedance magnitude (Ω)")
+
+        self.btn_capacitance = QPushButton("Capacitance")
+        self.btn_capacitance.setCheckable(True)
+        self.btn_capacitance.setChecked(False)
+        self.btn_capacitance.setToolTip("Display capacitance derived from imaginary impedance (F)")
+
+        self._mode_group = QButtonGroup(self)
+        self._mode_group.setExclusive(True)
+        self._mode_group.addButton(self.btn_impedance)
+        self._mode_group.addButton(self.btn_capacitance)
+
+        self.btn_impedance.toggled.connect(self._on_mode_toggled)
+        self.btn_capacitance.toggled.connect(self._on_plot_settings_changed)
+
+        mode_row.addWidget(self.btn_impedance)
+        mode_row.addWidget(self.btn_capacitance)
+        control_frame.layout().addLayout(mode_row)
+
+        # ---- Traces & Colors -------------------------------------------------
+        control_frame.layout().addSpacing(6)
+        control_frame.layout().addWidget(QLabel("<b>Traces &amp; Colors</b>"))
         self.trace_checkboxes = {}
+        self.trace_color_combos = {}
+        self.trace_alpha_spins = {}
+
         for trace_type in self.TRACE_TYPES:
+            row_widget = QWidget()
+            row_layout = QHBoxLayout(row_widget)
+            row_layout.setContentsMargins(0, 0, 0, 0)
+            row_layout.setSpacing(4)
+
             checkbox = QCheckBox(trace_type)
             checkbox.setChecked(True)
             checkbox.stateChanged.connect(self._on_plot_settings_changed)
             self.trace_checkboxes[trace_type] = checkbox
-            control_frame.layout().addWidget(checkbox)
 
+            from processors.impedance_calibration_processor import ImpedanceCalibrationProcessor
+            default_color = ImpedanceCalibrationProcessor.DEFAULT_TRACE_COLORS.get(trace_type, "black")
+
+            color_combo = QComboBox()
+            color_combo.addItems(TRACE_COLORS)
+            color_combo.setCurrentText(default_color)
+            color_combo.currentTextChanged.connect(self._on_plot_settings_changed)
+            self.trace_color_combos[trace_type] = color_combo
+
+            alpha_spin = QDoubleSpinBox()
+            alpha_spin.setRange(0.0, 1.0)
+            alpha_spin.setSingleStep(0.05)
+            alpha_spin.setDecimals(2)
+            alpha_spin.setValue(0.7)
+            alpha_spin.setToolTip(f"{trace_type} Opacity (α)")
+            alpha_spin.setFixedWidth(55)
+            alpha_spin.valueChanged.connect(self._on_plot_settings_changed)
+            self.trace_alpha_spins[trace_type] = alpha_spin
+
+            row_layout.addWidget(checkbox, stretch=1)
+            row_layout.addWidget(color_combo, stretch=0)
+            row_layout.addWidget(alpha_spin, stretch=0)
+
+            control_frame.layout().addWidget(row_widget)
+
+        # ---- Frequency Range -------------------------------------------------
         control_frame.layout().addSpacing(12)
         control_frame.layout().addWidget(QLabel("<b>Frequency Range</b>"))
 
@@ -105,6 +211,7 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         control_frame.layout().addWidget(QLabel("Max Frequency (Hz)"))
         control_frame.layout().addWidget(self.max_freq_spin)
 
+        # ---- Percent Error ---------------------------------------------------
         control_frame.layout().addSpacing(12)
         control_frame.layout().addWidget(QLabel("<b>Percent Error Options</b>"))
 
@@ -130,6 +237,18 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         self.layout().addLayout(plot_frame, stretch=4)
         self.layout().addWidget(control_frame, stretch=1)
 
+    # ── Slots ─────────────────────────────────────────────────────────────────
+
+    def _on_mode_toggled(self, checked: bool):
+        """Update internal display mode when the toggle buttons change."""
+        self._display_mode = "Impedance" if self.btn_impedance.isChecked() else "Capacitance"
+        self._refresh_plot()
+
+    def _on_plot_settings_changed(self, *_args):
+        self._refresh_plot()
+
+    # ── Data ingestion ─────────────────────────────────────────────────────────
+
     def set_active_data(self, x_data: np.ndarray, y_data: np.ndarray, metadata_dict: dict):
         """Accept the impedance trace list via metadata and redraw the plot."""
         self.metadata = metadata_dict or {}
@@ -150,8 +269,7 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         self.reference_combo.blockSignals(False)
         self.test_combo.blockSignals(False)
 
-    def _on_plot_settings_changed(self, *_args):
-        self._refresh_plot()
+    # ── Internal helpers ───────────────────────────────────────────────────────
 
     def _get_trace_by_type(self, trace_type: str):
         for trace in self.traces:
@@ -159,20 +277,26 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
                 return trace
         return None
 
-    def _build_line_color(self, trace_type: str):
-        color_tuple = SCAN_TYPE_COLORS.get(trace_type, ("black", "gray"))
-        is_dark = getattr(self.window(), "dark_mode", True)
-        return color_tuple[1] if is_dark else color_tuple[0]
+    def _build_line_color_and_alpha(self, trace_type: str, settings: dict = None):
+        color = "black"
+        alpha = 0.7
+        if trace_type in self.trace_color_combos:
+            color = self.trace_color_combos[trace_type].currentText()
+        if trace_type in self.trace_alpha_spins:
+            alpha = self.trace_alpha_spins[trace_type].value()
 
-    def _calculate_percent_error(self, z_ref, z_test):
-        z_ref = np.asarray(z_ref, dtype=np.complex128)
-        z_test = np.asarray(z_test, dtype=np.complex128)
-        mag_ref = np.abs(z_ref)
-        mag_test = np.abs(z_test)
-        error = np.full_like(mag_ref, np.nan, dtype=np.float64)
-        valid = np.isfinite(mag_ref) & np.isfinite(mag_test) & (mag_ref != 0)
-        error[valid] = 100.0 * np.abs(mag_test[valid] - mag_ref[valid]) / mag_ref[valid]
-        return error
+        from processors.impedance_calibration_processor import ImpedanceCalibrationProcessor
+        proc_color, proc_alpha = ImpedanceCalibrationProcessor._get_trace_color_and_alpha(
+            trace_type, settings
+        )
+        if color == "black" and proc_color != "black":
+            color = proc_color
+        if alpha == 0.7 and proc_alpha != 0.7:
+            alpha = proc_alpha
+
+        return color, alpha
+
+    # ── Main plotting ──────────────────────────────────────────────────────────
 
     def _refresh_plot(self):
         self.figure.clear()
@@ -180,6 +304,7 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
         ax2 = None
         plotted = False
         self.status_label.setText("")
+        self.avg_error_label.setText("Avg % Error: N/A")
 
         if not self.traces:
             self.status_label.setText("No impedance traces available for this experiment.")
@@ -188,8 +313,9 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
 
         settings = self.metadata.get("analysis_settings", {})
         lw = settings.get("line_width", 1.5)
-        mode = settings.get("impedance_display_mode", "Impedance")
+        is_capacitance = self._display_mode == "Capacitance"
 
+        # ── Draw selected traces ──────────────────────────────────────────────
         for trace_type, checkbox in self.trace_checkboxes.items():
             if not checkbox.isChecked():
                 continue
@@ -197,105 +323,104 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
             if trace is None:
                 continue
 
-            color = self._build_line_color(trace_type)
-            freq_vals = np.asarray(trace["f"])
-            if mode == "Capacitance":
-                z_imag_vals = np.asarray(trace.get("z_imag", np.zeros_like(freq_vals, dtype=np.float64)), dtype=np.float64)
-                y_vals = np.full_like(z_imag_vals, np.nan, dtype=np.float64)
-                valid = (freq_vals != 0) & (z_imag_vals != 0) & np.isfinite(freq_vals) & np.isfinite(z_imag_vals)
-                y_vals[valid] = 1.0 / (2.0 * np.pi * freq_vals[valid] * z_imag_vals[valid])
-            else:
-                if "z" in trace and trace["z"] is not None:
-                    y_vals = np.asarray(trace["z"])
-                else:
-                    z_complex = np.asarray(trace.get("z_real", 0.0)) + 1j * np.asarray(trace.get("z_imag", 0.0))
-                    y_vals = np.abs(z_complex)
+            color, alpha = self._build_line_color_and_alpha(trace_type, settings)
+            freq_vals = np.asarray(trace["f"], dtype=np.float64)
+            y_vals = self._get_y_vals(trace, freq_vals)
 
-            min_freq = self.min_freq_spin.value() if self.min_freq_spin.value() > 0 else None
-            max_freq = self.max_freq_spin.value() if self.max_freq_spin.value() > 0 else None
-            if min_freq is not None or max_freq is not None:
-                mask = np.ones_like(freq_vals, dtype=bool)
-                if min_freq is not None:
-                    mask &= (freq_vals >= min_freq)
-                if max_freq is not None:
-                    mask &= (freq_vals <= max_freq)
-                freq_vals = freq_vals[mask]
-                y_vals = y_vals[mask]
-
+            freq_vals, y_vals = self._apply_freq_mask(freq_vals, y_vals)
             if freq_vals.size == 0:
                 continue
 
-            ax.plot(freq_vals, y_vals, label=trace.get("label"), color=color, linewidth=lw)
+            ax.plot(
+                freq_vals, y_vals,
+                label=trace.get("label"),
+                color=color, alpha=alpha, linewidth=lw,
+            )
             plotted = True
 
-        # Match processor plotting: log-log for impedance, linear for capacitance
+        # ── Axis formatting ───────────────────────────────────────────────────
         ax.set_xscale("log")
-        ax.set_yscale("log" if mode == "Impedance" else "linear")
+        ax.set_yscale("log" if not is_capacitance else "linear")
         ax.set_xlabel("Frequency (Hz)", labelpad=8)
-        ax.set_ylabel("Impedance Z (Ohms)" if mode == "Impedance" else "Capacitance (F)", labelpad=8)
+        ax.set_ylabel(
+            "Impedance Z (Ω)" if not is_capacitance else "Capacitance (F)",
+            labelpad=8,
+        )
         ax.grid(True, which="both", ls="--", alpha=0.5)
-
         for spine in ax.spines.values():
             spine.set_linewidth(1.2)
 
-        # Reset avg label to N/A by default; will update below if we compute error
-        self.avg_error_label.setText("Avg % Error: N/A")
+        # ── Percent error ─────────────────────────────────────────────────────
         if self.percent_error_checkbox.isChecked():
             ref_name = self.reference_combo.currentText()
             test_name = self.test_combo.currentText()
+
             if ref_name == "Select a trace..." or test_name == "Select a trace..." or ref_name == test_name:
-                self.status_label.setText("Select two different traces for percent error calculation.")
+                self.status_label.setText(
+                    "Select two different traces for percent error calculation."
+                )
             else:
                 ref_trace = self._get_trace_by_type(ref_name)
                 test_trace = self._get_trace_by_type(test_name)
                 if ref_trace is None or test_trace is None:
-                    self.status_label.setText("Selected percent error traces are not available in the current session.")
+                    self.status_label.setText(
+                        "Selected percent error traces are not available in the current session."
+                    )
                 elif len(ref_trace["f"]) != len(test_trace["f"]):
-                    self.status_label.setText("Percent error requires the reference and test traces to share the same frequency axis.")
+                    self.status_label.setText(
+                        "Percent error requires the reference and test traces to share the same frequency axis."
+                    )
                 else:
-                    ref_freq = np.asarray(ref_trace["f"])
-                    test_freq = np.asarray(test_trace["f"])
-                    min_freq = self.min_freq_spin.value() if self.min_freq_spin.value() > 0 else None
-                    max_freq = self.max_freq_spin.value() if self.max_freq_spin.value() > 0 else None
-                    mask = None
-                    if min_freq is not None or max_freq is not None:
-                        mask = np.ones_like(ref_freq, dtype=bool)
-                        if min_freq is not None:
-                            mask &= (ref_freq >= min_freq)
-                        if max_freq is not None:
-                            mask &= (ref_freq <= max_freq)
-                        ref_freq = ref_freq[mask]
-                        test_freq = test_freq[mask]
+                    ref_freq = np.asarray(ref_trace["f"], dtype=np.float64)
+
+                    # Compute y-values in the *currently active display mode*
+                    ref_y = self._get_y_vals(ref_trace, ref_freq)
+                    test_y = self._get_y_vals(test_trace, ref_freq)
+
+                    ref_freq, ref_y = self._apply_freq_mask(ref_freq, ref_y)
+                    _, test_y = self._apply_freq_mask(
+                        np.asarray(test_trace["f"], dtype=np.float64), test_y
+                    )
+
+                    # Trim to the same length after masking
+                    min_len = min(len(ref_y), len(test_y))
+                    ref_y = ref_y[:min_len]
+                    test_y = test_y[:min_len]
+                    ref_freq = ref_freq[:min_len]
 
                     if ref_freq.size == 0:
-                        self.status_label.setText("Frequency range selected excludes all percent error data.")
+                        self.status_label.setText(
+                            "Frequency range selected excludes all percent error data."
+                        )
                     else:
-                        z_ref = np.asarray(ref_trace["z_real"]) + 1j * np.asarray(ref_trace["z_imag"])
-                        z_test = np.asarray(test_trace["z_real"]) + 1j * np.asarray(test_trace["z_imag"])
-                        if mask is not None:
-                            z_ref = z_ref[mask]
-                            z_test = z_test[mask]
-                        error_pct = self._calculate_percent_error(z_ref, z_test)
+                        # Percent error on actual plotted magnitudes (works for both Z and C)
+                        ref_abs = np.abs(ref_y)
+                        test_abs = np.abs(test_y)
+                        error_pct = np.full_like(ref_abs, np.nan, dtype=np.float64)
+                        valid = np.isfinite(ref_abs) & np.isfinite(test_abs) & (ref_abs != 0)
+                        error_pct[valid] = (
+                            100.0 * np.abs(test_abs[valid] - ref_abs[valid]) / ref_abs[valid]
+                        )
+
                         ax2 = ax.twinx()
                         ax2.plot(ref_freq, error_pct, linestyle="--", color="tab:red", label="% Error")
                         ax2.set_ylabel("Percent Error (%)", color="tab:red")
                         ax2.tick_params(axis="y", colors="tab:red")
                         ax2.set_yscale("linear")
-                        self.status_label.setText("Percent error plotted using the selected reference and test traces.")
+
+                        mode_label = "Capacitance" if is_capacitance else "Impedance"
+                        self.status_label.setText(
+                            f"Percent error plotted on {mode_label} values — "
+                            f"reference: {ref_name}, test: {test_name}."
+                        )
                         plotted = True
 
-                        # Compute average percent error over finite values in the current plotted range
                         valid_mask = np.isfinite(error_pct)
                         if np.any(valid_mask):
                             avg_pct = float(np.nanmean(error_pct[valid_mask]))
                             self.avg_error_label.setText(f"Avg % Error: {avg_pct:.2f}%")
-                        else:
-                            self.avg_error_label.setText("Avg % Error: N/A")
 
-        if plotted and self.trace_checkboxes["Calibrated Sample"].isChecked():
-            # Ensure calibrated sample line is visible in the legend if selected.
-            pass
-
+        # ── Legend ────────────────────────────────────────────────────────────
         if plotted and self.metadata.get("analysis_settings", {}).get("show_legend", True):
             handles, labels = ax.get_legend_handles_labels()
             if ax2 is not None:
@@ -309,6 +434,8 @@ class ImpedanceCalibrationDashboard(BaseModelingDashboard):
             self.status_label.setText("No traces selected for plotting.")
 
         self.canvas.draw()
+
+    # ── Lifecycle ─────────────────────────────────────────────────────────────
 
     def shutdown(self):
         self.traces = []
